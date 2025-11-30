@@ -8,6 +8,7 @@ import store from './store/store'
 import VueScrollTo from 'vue-scrollto'
 import { createNotivue } from 'notivue'
 import { createPinia } from 'pinia'
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginPage from './components/LoginPage.vue'
@@ -15,7 +16,7 @@ import DashboardPage from './components/DashboardPage.vue'
 import SignUpPage from './components/SignUpPage.vue'
 import ForgotPasswordPage from './components/ForgotPwdPage.vue'
 import NotFoundPage from './components/NotFoundPage.vue'
-import InsForm from './components/InsForm.vue'
+import InsFormPage from './components/InsForm.vue'
 
 import DashboardProjectsPage from './components/DashboardProjects.vue'
 import DashboardLayout from './components/DashboardLayout.vue'
@@ -25,10 +26,10 @@ import { existCurrentUser } from './lib/appwrite'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
+// import { name } from '@vue/eslint-config-prettier/skip-formatting'
 // import { meta } from 'eslint-plugin-vue'
 
 const routes = [
-  { path: '/insForm', component: InsForm },
   // -------- PUBLIC PAGES (NO DASHBOARD) --------
   {
     path: '/',
@@ -44,7 +45,6 @@ const routes = [
     path: '/forgotPassword',
     name: 'forgotPassword',
     component: ForgotPasswordPage,
-    props: true,
   },
   {
     path: '/:pathMatch(.*)*',
@@ -68,6 +68,11 @@ const routes = [
         name: 'dashboard-projects',
         component: DashboardProjectsPage,
         props: true,
+      },
+      {
+        path: 'ins_form/:project_id',
+        name: 'dashboard-project-ins-form',
+        component: InsFormPage,
       },
     ],
   },
@@ -96,6 +101,7 @@ router.beforeEach(async (to, from, next) => {
 const notivue = createNotivue()
 
 const piniaStore = createPinia()
+piniaStore.use(piniaPluginPersistedstate)
 
 const vuetify = createVuetify({
   components,

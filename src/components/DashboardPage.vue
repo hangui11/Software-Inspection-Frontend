@@ -4,10 +4,10 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { createProject, joinProject, formatAppwriteDate } from '@/lib/appwrite'
 import { userInformationStore } from '@/store/searchStore'
 import { storeToRefs } from 'pinia'
-// import { useRouter } from 'vue-router';
+import { useRouter } from 'vue-router'
 // import axios from 'axios'
 
-// const router = useRouter()
+const router = useRouter()
 const create_project = ref(true)
 const currentLayout = ref('project-none')
 const project_input = ref('')
@@ -139,7 +139,12 @@ const join_project_api = async () => {
             v-for="project in user_recent_projects"
             :key="project.project_name"
             class="project-box"
-            @click="view_project(project.project_name)"
+            @click="
+              router.push({
+                name: 'dashboard-project-ins-form',
+                params: { project_id: project.$id },
+              })
+            "
           >
             <div v-if="project.project_name">
               <h4>{{ project.project_name }}</h4>

@@ -21,6 +21,11 @@ export const useSearchStore = defineStore('search', {
       this.filteredProjects = []
     },
   },
+  persist: {
+    enabled: true,
+    storage: sessionStorage,
+    paths: ['filteredProjects', 'projects', 'avatar', 'username'], // Only save the project lists
+  },
 })
 
 export const userInformationStore = defineStore('user_information', {
@@ -37,5 +42,10 @@ export const userInformationStore = defineStore('user_information', {
         (this.avatar = avatarUrl),
         (this.username = userName))
     },
+  },
+  persist: {
+    enabled: true,
+    storage: sessionStorage,
+    paths: ['avatar', 'username', 'projects', 'recent_projects'], // Persist all user-related data
   },
 })

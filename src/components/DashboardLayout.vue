@@ -28,6 +28,7 @@ import DashboardContainer from '@/components/DashboardContainer.vue'
 import { onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { getCurrentUser, getUserProjects, logOut } from '@/lib/appwrite'
 import { userInformationStore } from '@/store/searchStore'
+import { storeToRefs } from 'pinia'
 const username = ref('')
 const user_avatar = ref('')
 const user_id = ref('')
@@ -37,24 +38,44 @@ const user_projects = ref([])
 const recent_projects = ref([])
 const userInfoStore = userInformationStore()
 
+const {
+  recent_projects: recent_projects_stored,
+  projects: projects_stored,
+  avatar: avatar_stored,
+  username: username_stored,
+} = storeToRefs(userInfoStore)
+
 const updatePageHeight = () => {
   nextTick(() => {
     pageHeight.value = document.documentElement.scrollHeight
   })
 }
 onMounted(async () => {
-  try {
-    const current_user = await getCurrentUser()
-    console.log(current_user)
-    username.value = current_user.username
-    user_avatar.value = current_user.avatar
-    user_id.value = current_user.user_id
-  } catch (error) {
-    alert('Do not have user logged ' + error)
+  const isProjectsMissing = !projects_stored.value || projects_stored.value.length === 0
+  const isRecentProjectsMissing =
+    !recent_projects_stored.value || recent_projects_stored.value.length === 0
+  const isUsernameMissing = !username_stored.value
+  const isAvatarMissing = !avatar_stored.value
+  if (isProjectsMissing || isRecentProjectsMissing || isUsernameMissing || isAvatarMissing) {
+    try {
+      const current_user = await getCurrentUser()
+      console.log(current_user)
+      username.value = current_user.username
+      user_avatar.value = current_user.avatar
+      user_id.value = current_user.user_id
+    } catch (error) {
+      alert('Do not have user logged ' + error)
+    }
+    await loadProjects()
+    updatePageHeight()
+    isLoading.value = false
+  } else {
+    user_projects.value = projects_stored.value
+    recent_projects.value = recent_projects_stored.value
+    user_avatar.value = avatar_stored.value
+    username.value = username_stored.value
+    isLoading.value = false
   }
-  await loadProjects()
-  updatePageHeight()
-  isLoading.value = false
 })
 
 onUnmounted(async () => {

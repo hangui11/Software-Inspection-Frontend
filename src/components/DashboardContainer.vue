@@ -189,8 +189,6 @@ onBeforeUnmount(() => {
   padding: 1rem 3rem;
   background-color: #ffffff;
   border-bottom: solid 2px rgba(241, 241, 241, 1);
-  margin-left: 10px;
-  margin-right: 10px;
 }
 
 .icon {

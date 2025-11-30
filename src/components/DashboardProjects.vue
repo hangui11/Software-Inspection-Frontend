@@ -2,7 +2,6 @@
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import DashboardContainer from './DashboardContainer.vue'
 // Assuming you have imported your store correctly
 import { useSearchStore } from '@/store/searchStore'
 import { formatAppwriteDate } from '@/lib/appwrite'
@@ -95,7 +94,17 @@ const finalDisplayProjects = computed(() => {
         </div>
       </div>
       <div class="projects-container">
-        <div v-for="project in finalDisplayProjects" :key="project.$id" class="project-box">
+        <div
+          v-for="project in finalDisplayProjects"
+          :key="project.$id"
+          class="project-box"
+          @click="
+            router.push({
+              name: 'dashboard-project-ins-form',
+              params: { project_id: project.$id },
+            })
+          "
+        >
           <h4>{{ project.project_name }}</h4>
           <h4>Members: {{ project.members }}</h4>
 
@@ -147,7 +156,7 @@ h1 {
 
 /* Sorting Dropdown */
 .sort-dropdown {
-  padding: 10px 15px;
+  padding: 10px;
   border: 1px solid #ccc;
   border-radius: 6px;
   background-color: white;
