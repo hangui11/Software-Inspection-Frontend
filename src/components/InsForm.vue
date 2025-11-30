@@ -3,6 +3,7 @@ import { useRoute } from 'vue-router'
 import { ref, onMounted, computed, onBeforeUnmount } from 'vue' // Added computed, onBeforeUnmount
 import { storeToRefs } from 'pinia'
 import { userInformationStore } from '@/store/searchStore'
+import share_icon from '@/assets/icons/share.png'
 // --- ROUTER PARAMS & INITIAL DATA FETCH ---
 
 const route = useRoute()
@@ -38,7 +39,7 @@ onMounted(() => {
 
 // 🔑 Computed property for the text on the button/tooltip
 const copyMessage = computed(() => {
-  if (copyStatus.value === 'copied') return 'Copied! ID is in your clipboard.'
+  if (copyStatus.value === 'copied') return 'Copied!'
   if (copyStatus.value === 'failed') return 'Failed to copy.'
   return 'Click to copy Project ID'
 })
@@ -293,44 +294,42 @@ const addDefect = () => {
 </script>
 
 <template>
-  <div class="header-container">
-    <h3>{{ current_project?.project_name }}</h3>
-
-    <div
-      v-if="projectId"
-      class="project-id-display"
-      @click="copyIdToClipboard"
-      :title="copyMessage"
-    >
-      <span class="project-id-text">{{ projectId }}</span>
-
-      <template v-if="copyStatus === 'copied'">
-        <svg
-          class="copy-icon"
-          style="color: #52c41a"
-          viewBox="0 0 24 24"
-          width="16"
-          height="16"
-          fill="currentColor"
-        >
-          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-        </svg>
-      </template>
-      <template v-else>
-        <svg class="copy-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-          <path
-            d="M16 1H4C2.9 1 2 1.9 2 3v14h2V3h12V1zm3 4H8C6.9 5 6 5.9 6 7v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
-          />
-        </svg>
-      </template>
-    </div>
-
-    <span v-if="copyStatus !== 'initial'" class="copy-feedback">
-      {{ copyStatus === 'copied' ? 'ID Copied!' : 'Copy Error' }}
-    </span>
-  </div>
   <div class="app-container">
     <aside class="sidebar">
+      <div class="header-container">
+        <h3>{{ current_project?.project_name }}</h3>
+
+        <div
+          v-if="projectId"
+          class="project-id-display"
+          @click="copyIdToClipboard"
+          :title="copyMessage"
+        >
+          <template v-if="copyStatus === 'copied'">
+            <svg
+              class="copy-icon"
+              style="color: #52c41a"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="currentColor"
+            >
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+            </svg>
+          </template>
+          <template v-else>
+            <svg class="copy-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path
+                d="M16 1H4C2.9 1 2 1.9 2 3v14h2V3h12V1zm3 4H8C6.9 5 6 5.9 6 7v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+              />
+            </svg>
+          </template>
+        </div>
+
+        <span v-if="copyStatus !== 'initial'" class="copy-feedback">
+          {{ copyStatus === 'copied' ? 'ID Copied!' : 'Copy Error' }}
+        </span>
+      </div>
       <div class="sidebar-header"><h3>Files</h3></div>
       <div class="upload-section">
         <input
@@ -358,6 +357,11 @@ const addDefect = () => {
             {{ p.name }}
           </li>
         </ul>
+      </div>
+
+      <div class="share-component">
+        <h3>Share</h3>
+        <img :src="share_icon" width="32px" height="32px" />
       </div>
     </aside>
 
@@ -543,7 +547,8 @@ const addDefect = () => {
   margin: 0% 3%;
   display: flex;
   align-items: center;
-  gap: 15px; /* Increase spacing */
+  gap: 7px; /* Increase spacing */
+  margin-bottom: 20px;
 }
 
 /* The clickable ID block container */
@@ -594,6 +599,7 @@ const addDefect = () => {
   border-radius: 4px;
   font-weight: bold;
   margin-left: 10px;
+  font-size: 10px;
 }
 /* --- APP GLOBAL --- */
 .app-container {
@@ -639,7 +645,7 @@ const addDefect = () => {
   gap: 8px;
 }
 .product-list {
-  flex: 1;
+  /* flex: 1; */
   padding: 20px 0;
   overflow-y: auto;
 }
@@ -663,6 +669,20 @@ const addDefect = () => {
   background-color: #34495e;
   border-left-color: #3498db;
   font-weight: bold;
+}
+
+.share-component {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  justify-content: center;
+  cursor: pointer;
+  border: solid wheat;
+}
+
+.share-component h3 {
+  margin: 0;
 }
 
 /* --- LAYOUT PANES --- */

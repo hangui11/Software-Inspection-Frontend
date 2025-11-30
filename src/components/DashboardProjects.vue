@@ -22,12 +22,7 @@ const sortCriteria = ref('dateDesc')
 onMounted(() => {
   // Check if the core data array is empty or null
 
-  if (
-    !filteredProjects.value ||
-    filteredProjects.value.length === 0 ||
-    !projects.value ||
-    projects.value.length == 0
-  ) {
+  if (!projects.value || projects.value.length == 0) {
     console.log('No projects found in store. Redirecting to dashboard.')
 
     // 2. Navigate back to the dashboard route
