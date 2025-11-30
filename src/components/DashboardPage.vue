@@ -1,80 +1,28 @@
 <!-- Dashboard.vue -->
 <script setup>
-import { onMounted, onUnmounted, ref, nextTick } from 'vue'
-import { getCurrentUser, getUserProjects, logOut, createProject, joinProject } from '@/lib/appwrite'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { createProject, joinProject, formatAppwriteDate, getUserProjects } from '@/lib/appwrite'
+import { userInformationStore } from '@/store/searchStore'
+import { storeToRefs } from 'pinia'
 // import { useRouter } from 'vue-router';
-import DashboardContainer from './DashboardContainer.vue'
 // import axios from 'axios'
 
 // const router = useRouter()
 const create_project = ref(true)
 const currentLayout = ref('project-none')
 const project_input = ref('')
-const username = ref('')
-const user_avatar = ref('')
-const user_id = ref('')
+const userInfoStore = userInformationStore()
+
 const selectedRole = ref('reviewer') // Default value
 const roles = ref(['moderator', 'reviewer', 'instructor'])
-const user_projects = ref([])
-const recent_projects = ref([])
-const pageHeight = ref(window.innerHeight)
-const isLoading = ref(true)
 
-const updatePageHeight = () => {
-  nextTick(() => {
-    pageHeight.value = document.documentElement.scrollHeight
-  })
-}
+const { recent_projects, projects, avatar, username } = storeToRefs(userInfoStore)
+const user_projects = ref(projects)
+const user_recent_projects = ref(recent_projects)
 
-const loadProjects = async () => {
-  try {
-    user_projects.value = await getUserProjects(username.value)
-    console.log('User projects fetched in DashboardContainer:', user_projects)
-    recent_projects.value = user_projects.value.slice(0, 3) // Get the 3 most recent projects
-    if (recent_projects.value.length < 3) {
-      // If less than 3 projects, fill with placeholders
-      const placeholdersNeeded = 3 - recent_projects.value.length
-      for (let i = 0; i < placeholdersNeeded; i++) {
-        recent_projects.value.push({
-          project_name: null,
-          name: 'No Project',
-          update_date: 'N/A',
-        })
-      }
-    }
-    console.log(user_projects)
-    console.log(recent_projects)
-  } catch (error) {
-    alert(error)
-    user_projects.value = []
-    for (let i = 0; i < 3; i++) {
-      recent_projects.value.push({
-        project_name: null,
-        name: 'No Project',
-        update_date: 'N/A',
-      })
-    }
-  }
-}
+onMounted(() => {})
 
-onMounted(async () => {
-  try {
-    const current_user = await getCurrentUser()
-    console.log(current_user)
-    username.value = current_user.username
-    user_avatar.value = current_user.avatar
-    user_id.value = current_user.user_id
-  } catch (error) {
-    alert('Do not have user logged ' + error)
-  }
-  await loadProjects()
-  updatePageHeight()
-  isLoading.value = false
-})
-
-onUnmounted(async () => {
-  window.removeEventListener('beforeunload', logOut)
-})
+onUnmounted(() => {})
 
 const showProjectWindow = (project_type) => {
   currentLayout.value = 'project-flex'
@@ -115,33 +63,62 @@ const join_project_api = async () => {
   currentLayout.value = 'project-none'
   await loadProjects()
 }
+
+const loadProjects = async () => {
+  try {
+    user_projects.value = await getUserProjects(username.value)
+    console.log('User projects fetched in DashboardContainer:', user_projects)
+    user_recent_projects.value = user_projects.value.slice(0, 3) // Get the 3 most recent projects
+    if (user_recent_projects.value.length < 3) {
+      // If less than 3 projects, fill with placeholders
+      const placeholdersNeeded = 3 - user_recent_projects.value.length
+      for (let i = 0; i < placeholdersNeeded; i++) {
+        user_recent_projects.value.push({
+          project_name: null,
+          name: 'No Project',
+          update_date: 'N/A',
+        })
+      }
+    }
+    console.log(user_projects)
+    console.log(user_recent_projects)
+  } catch (error) {
+    alert(error)
+    user_projects.value = []
+    for (let i = 0; i < 3; i++) {
+      user_recent_projects.value.push({
+        project_name: null,
+        name: 'No Project',
+        update_date: 'N/A',
+      })
+    }
+  }
+}
 </script>
 
 <template>
-  <div class="initial-loading-status" :style="{ height: `${pageHeight}px` }" v-if="isLoading">
-    <v-progress-circular
-      color="rgba(0, 0, 0, 0.5)"
-      model-value="20"
-      :size="128"
-      :width="12"
-      indeterminate="true"
-      class="loading-circular"
-    ></v-progress-circular>
-    <h1>LOADING THE COMPONENTS . . .</h1>
-  </div>
-
-  <div v-else class="components">
+  <div class="components">
     <div :class="currentLayout" class="project-modal">
       <div v-if="create_project" class="project-window">
         <div class="close-emoji" @click="closeProjectWindonw">❌</div>
         <div class="project-name-text">Project Name:</div>
-        <input id="project-name" type="text" v-model="project_input" />
+        <input
+          id="project-name"
+          type="text"
+          v-model="project_input"
+          @keydown.enter="create_project_api()"
+        />
         <button @click="create_project_api()">Create the Project</button>
       </div>
       <div v-else class="project-window">
         <div class="close-emoji" @click="closeProjectWindonw">❌</div>
         <div class="project-code-text">Project Code:</div>
-        <input id="project-code" type="text" v-model="project_input" />
+        <input
+          id="project-code"
+          type="text"
+          v-model="project_input"
+          @keydown.enter="join_project_api()"
+        />
         <div class="role-selection-group">
           <label for="role-select">Select Your Role:</label>
 
@@ -159,7 +136,6 @@ const join_project_api = async () => {
       </div>
     </div>
 
-    <DashboardContainer :avatar="user_avatar" :username="username" :projects="user_projects" />
     <div class="body">
       <div class="create-join-project">
         <h2>Initiate a New Project</h2>
@@ -177,16 +153,16 @@ const join_project_api = async () => {
 
         <div class="projects-container">
           <div
-            v-for="project in recent_projects"
+            v-for="project in user_recent_projects"
             :key="project.project_name"
             class="project-box"
             @click="view_project(project.project_name)"
           >
             <div v-if="project.project_name">
-              <h4>Project Name: {{ project.project_name }}</h4>
+              <h4>{{ project.project_name }}</h4>
               <h4>Members: {{ project.members }}</h4>
-              <p>Created: {{ project.$createdAt }}</p>
-              <p>Updated: {{ project.update_date }}</p>
+              <p>Created: {{ formatAppwriteDate(project.$createdAt) }}</p>
+              <p>Updated: {{ formatAppwriteDate(project.update_date) }}</p>
             </div>
             <div v-else>
               <h4>Create/Join New Project</h4>
@@ -213,17 +189,6 @@ const join_project_api = async () => {
     'Open Sans',
     'Helvetica Neue',
     sans-serif;
-}
-
-.initial-loading-status {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  /* height: 100%; */
-  background-color: rgba(226, 226, 226, 0.1);
-  z-index: 20000;
 }
 
 .body {
@@ -258,46 +223,87 @@ button:hover {
 }
 
 .projects-container {
-  margin-top: 40px;
-  display: flex; /* horizontal layout */
-  gap: 60px; /* space between boxes */
-  flex-wrap: wrap; /* wrap to next line if not enough space */
+  display: grid;
+  /* Responsive grid: max 3 columns when wide, min size 300px */
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px; /* Spacing between cards */
+  padding: 20px 0;
 }
 
 .project-box {
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 12px;
-  width: 300px; /* fixed width for each box */
-  height: 250px;
-  background-color: #f9f9f9;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 12px;
+  padding: 25px;
+  /* width: 30%; */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
+  /* Flex to push status to the bottom */
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  justify-items: center;
-  cursor: pointer;
 }
 
 .project-box:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   transform: translateY(-5px);
-  transition: all 0.3s ease-in-out;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid #007bff; /* Primary color highlight */
+  cursor: pointer;
 }
 
+.project-box h4 {
+  font-size: 1.1em;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.project-box h4:first-child {
+  font-size: 1.4em;
+  font-weight: 600;
+  color: #007bff;
+  margin-top: 0;
+  margin-bottom: 15px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.project-box p {
+  font-size: 0.95em;
+  color: #777;
+  margin: 6px 0;
+}
+
+/* Styling the custom plus icon */
 .circle_adding {
-  width: 150px;
-  height: 150px;
-  border: 2px dashed #888;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* Circle container */
+  width: 100%;
+  height: 100%;
+  /* Restore essential styling */
+  border-radius: 10px; /* 🔑 RESTORE: Makes it a circle */
+
   font-size: 40px;
-  font-weight: bold;
-  color: #888;
-  user-select: none;
+  font-weight: 300;
+  transition: transform 0.2s ease;
+
+  /* 🔑 FIX: Use Flexbox properties for centering */
+  display: flex;
+  justify-content: center; /* 🔑 CORRECTED: Centers content horizontally (main axis) */
+  align-items: center; /* Centers content vertically (cross axis) */
+}
+
+.project-box:hover .circle_adding {
+  /* Small animation on hover */
+  transform: scale(1.1);
+  /* Use a proper box shadow color for the circle */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.15); /* Adjusted shadow to match green theme */
+}
+
+/* Apply a distinct background to the action card on hover/focus */
+.project-box:has(> div:last-child):hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid #007bff;
 }
 
 .create-join-project {
@@ -310,10 +316,10 @@ button:hover {
 }
 
 .project-modal {
-  width: 100%;
-  height: 100%;
+  width: 100vw; /* 100% of Viewport Width */
+  height: 100vh;
   /* display: none; */
-  position: absolute;
+  position: fixed;
   align-items: center;
   justify-content: center;
   z-index: 1000;

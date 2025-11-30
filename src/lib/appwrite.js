@@ -292,3 +292,17 @@ export const joinProject = async (project_id, username, role) => {
     throw error
   }
 }
+
+export function formatAppwriteDate(isoString) {
+  if (!isoString) return 'N/A'
+
+  try {
+    const date = new Date(isoString)
+    // Use Intl.DateTimeFormat for robust, localized formatting
+    const options = { year: 'numeric', month: 'short', day: 'numeric' }
+    return new Intl.DateTimeFormat('en-US', options).format(date)
+  } catch (e) {
+    console.error('Date parsing error:', e)
+    return 'Invalid Date'
+  }
+}

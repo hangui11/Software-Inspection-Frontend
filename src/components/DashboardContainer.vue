@@ -1,13 +1,14 @@
 <script setup>
 import { useRouter } from 'vue-router'
-import { ref, onBeforeUnmount, onMounted } from 'vue'
-
+import { ref, onBeforeUnmount, onMounted, nextTick } from 'vue'
+import { useSearchStore } from '@/store/searchStore'
 import search from '@/assets/icons/search.png'
 import signout from '@/assets/icons/signout.svg'
 
 import { logOut } from '@/lib/appwrite'
 
 const router = useRouter()
+const searchStore = useSearchStore()
 
 const props = defineProps({
   avatar: {
@@ -25,6 +26,7 @@ const props = defineProps({
 })
 
 const input = ref('')
+const inputRef = ref(null)
 
 const dashboard = () => {
   window.location.href = '/dashboard'
@@ -46,6 +48,19 @@ const filteredProjects = ref([])
 const showDropdown = ref(false)
 const searchContainer = ref(null)
 
+const handleInput = () => {
+  // 1. Trigger the filtering logic
+  filterProjects()
+}
+
+const hideDropdown = () => {
+  // We use a small delay to prevent the dropdown from instantly closing
+  // if the user clicks a scrollbar or slightly outside the search item.
+  setTimeout(() => {
+    showDropdown.value = false
+  }, 50)
+}
+
 // Filter projects based on input text
 const filterProjects = () => {
   const query = input.value.toLowerCase()
@@ -55,7 +70,9 @@ const filterProjects = () => {
     showDropdown.value = false
     return
   }
-  filteredProjects.value = props.projects.filter((p) => p.project_id.toLowerCase().includes(query))
+  filteredProjects.value = props.projects.filter((p) =>
+    p.project_name.toLowerCase().includes(query),
+  )
   showDropdown.value = filteredProjects.value.length > 0
 }
 
@@ -64,13 +81,28 @@ const findAllRelatedProjects = () => {
     alert('Please enter a project name to search.')
     return
   }
-  console.log('Enter pressed. Search:', filteredProjects.value)
+  // searchStore.clearSearch()
+  const finalFilteredProjects = filteredProjects.value
+  const userProjects = props.projects
+
+  // 🔑 STEP 1: Save ALL necessary data to the store
+  searchStore.setSearchResults(finalFilteredProjects, userProjects, props.avatar, props.username)
+
+  // 🔑 STEP 2: Navigate to the destination component using its name
+  router.push('/dashboard/project_query')
 }
 
 // When selecting a project
 const selectProject = (project) => {
-  input.value = project.project_id
+  input.value = project.project_name
   showDropdown.value = false
+  nextTick(() => {
+    if (inputRef.value) {
+      inputRef.value.focus()
+      // Ensure the cursor is at the end of the text
+      inputRef.value.selectionStart = inputRef.value.selectionEnd = inputRef.value.value.length
+    }
+  })
 }
 
 const handleClickOutside = (event) => {
@@ -100,18 +132,22 @@ onBeforeUnmount(() => {
         type="text"
         v-model="input"
         placeholder="Search a project"
-        @input="filterProjects"
+        autocomplete="off"
+        @input="handleInput"
         @keydown.enter="findAllRelatedProjects"
+        @blur="hideDropdown"
+        :ref="inputRef"
       />
 
       <div v-if="showDropdown" class="search-bar">
         <div
           v-for="project in filteredProjects"
-          :key="project.project_id"
+          :key="project.project_name"
           class="search-item"
+          @mousedown.prevent
           @click="selectProject(project)"
         >
-          {{ project.project_id }}
+          {{ project.project_name }}
         </div>
       </div>
       <img :src="search" class="search-logo" @click="findAllRelatedProjects" />
