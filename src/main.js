@@ -15,6 +15,8 @@ import DashboardPage from './components/DashboardPage.vue'
 import SignUpPage from './components/SignUpPage.vue'
 import ForgotPasswordPage from './components/ForgotPwdPage.vue'
 import NotFoundPage from './components/NotFoundPage.vue'
+import InsForm from './components/InsForm.vue'
+
 import DashboardProjectsPage from './components/DashboardProjects.vue'
 import DashboardLayout from './components/DashboardLayout.vue'
 import { existCurrentUser } from './lib/appwrite'
@@ -26,6 +28,7 @@ import * as directives from 'vuetify/directives'
 // import { meta } from 'eslint-plugin-vue'
 
 const routes = [
+  { path: '/insForm', component: InsForm },
   // -------- PUBLIC PAGES (NO DASHBOARD) --------
   {
     path: '/',
