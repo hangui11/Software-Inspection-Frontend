@@ -14,6 +14,8 @@ import DashboardPage from './components/DashboardPage.vue'
 import SignUpPage from './components/SignUpPage.vue'
 import ForgotPasswordPage from './components/ForgotPwdPage.vue'
 import NotFoundPage from './components/NotFoundPage.vue'
+import InsForm from './components/InsForm.vue'
+
 import { existCurrentUser } from './lib/appwrite'
 
 // Vuetify
@@ -27,6 +29,7 @@ const routes = [
   { path: '/dashboard', component: DashboardPage, meta: { requiresAuth: true } },
   { path: '/forgotPassword', component: ForgotPasswordPage, props: true },
   { path: '/:pathMatch(.*)*', component: NotFoundPage }, // Ruta comodín para manejar 404
+  { path: '/insForm', component: InsForm },
 ]
 
 const router = createRouter({
