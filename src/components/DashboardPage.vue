@@ -39,6 +39,10 @@ const closeProjectWindonw = () => {
 }
 
 const create_project_api = async () => {
+  if (project_input.value == '') {
+    alert('Put a valid name for the project')
+    return
+  }
   try {
     const create_project_session = await createProject(project_input.value, username.value)
     console.log(create_project_session)
@@ -50,6 +54,10 @@ const create_project_api = async () => {
 }
 
 const join_project_api = async () => {
+  if (project_input.value == '') {
+    alert('Put a valid code for the project')
+    return
+  }
   try {
     const join_project_session = await joinProject(
       project_input.value,
