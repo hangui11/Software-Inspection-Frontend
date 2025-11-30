@@ -1,7 +1,7 @@
 <!-- Dashboard.vue -->
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
-import { createProject, joinProject, formatAppwriteDate, getUserProjects } from '@/lib/appwrite'
+import { createProject, joinProject, formatAppwriteDate } from '@/lib/appwrite'
 import { userInformationStore } from '@/store/searchStore'
 import { storeToRefs } from 'pinia'
 // import { useRouter } from 'vue-router';
@@ -17,8 +17,14 @@ const selectedRole = ref('reviewer') // Default value
 const roles = ref(['moderator', 'reviewer', 'instructor'])
 
 const { recent_projects, projects, avatar, username } = storeToRefs(userInfoStore)
-const user_projects = ref(projects)
 const user_recent_projects = ref(recent_projects)
+
+const props = defineProps({
+  loadProjects: {
+    type: Function,
+    required: true, // Ensures the parent always provides the function
+  },
+})
 
 onMounted(() => {})
 
@@ -50,7 +56,7 @@ const create_project_api = async () => {
     alert(error)
   }
   currentLayout.value = 'project-none'
-  await loadProjects()
+  await props.loadProjects()
 }
 
 const join_project_api = async () => {
@@ -69,38 +75,7 @@ const join_project_api = async () => {
     alert(error)
   }
   currentLayout.value = 'project-none'
-  await loadProjects()
-}
-
-const loadProjects = async () => {
-  try {
-    user_projects.value = await getUserProjects(username.value)
-    console.log('User projects fetched in DashboardContainer:', user_projects)
-    user_recent_projects.value = user_projects.value.slice(0, 3) // Get the 3 most recent projects
-    if (user_recent_projects.value.length < 3) {
-      // If less than 3 projects, fill with placeholders
-      const placeholdersNeeded = 3 - user_recent_projects.value.length
-      for (let i = 0; i < placeholdersNeeded; i++) {
-        user_recent_projects.value.push({
-          project_name: null,
-          name: 'No Project',
-          update_date: 'N/A',
-        })
-      }
-    }
-    console.log(user_projects)
-    console.log(user_recent_projects)
-  } catch (error) {
-    alert(error)
-    user_projects.value = []
-    for (let i = 0; i < 3; i++) {
-      user_recent_projects.value.push({
-        project_name: null,
-        name: 'No Project',
-        update_date: 'N/A',
-      })
-    }
-  }
+  await props.loadProjects()
 }
 </script>
 
@@ -173,8 +148,8 @@ const loadProjects = async () => {
               <p>Updated: {{ formatAppwriteDate(project.update_date) }}</p>
             </div>
             <div v-else>
-              <h4>Create/Join New Project</h4>
-              <div class="circle_adding">+</div>
+              <h4>Not Project Yet</h4>
+              <h4>Create or Join a project</h4>
             </div>
           </div>
         </div>
@@ -283,31 +258,6 @@ button:hover {
   margin: 6px 0;
 }
 
-/* Styling the custom plus icon */
-.circle_adding {
-  /* Circle container */
-  width: 100%;
-  height: 100%;
-  /* Restore essential styling */
-  border-radius: 10px; /* 🔑 RESTORE: Makes it a circle */
-
-  font-size: 40px;
-  font-weight: 300;
-  transition: transform 0.2s ease;
-
-  /* 🔑 FIX: Use Flexbox properties for centering */
-  display: flex;
-  justify-content: center; /* 🔑 CORRECTED: Centers content horizontally (main axis) */
-  align-items: center; /* Centers content vertically (cross axis) */
-}
-
-.project-box:hover .circle_adding {
-  /* Small animation on hover */
-  transform: scale(1.1);
-  /* Use a proper box shadow color for the circle */
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.15); /* Adjusted shadow to match green theme */
-}
-
 /* Apply a distinct background to the action card on hover/focus */
 .project-box:has(> div:last-child):hover {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
@@ -324,14 +274,16 @@ button:hover {
 }
 
 .project-modal {
-  width: 100vw; /* 100% of Viewport Width */
-  height: 100vh;
-  /* display: none; */
   position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  background-color: rgba(0, 0, 0, 0.5);
 }
 
 .project-none {

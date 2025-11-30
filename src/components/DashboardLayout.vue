@@ -19,7 +19,7 @@
     />
 
     <!-- PAGES WILL RENDER HERE -->
-    <router-view />
+    <router-view :loadProjects="loadProjects" />
   </div>
 </template>
 
@@ -55,12 +55,6 @@ onMounted(async () => {
   await loadProjects()
   updatePageHeight()
   isLoading.value = false
-  userInfoStore.setSearchResults(
-    recent_projects.value,
-    user_projects.value,
-    user_avatar.value,
-    username.value,
-  )
 })
 
 onUnmounted(async () => {
@@ -85,6 +79,12 @@ const loadProjects = async () => {
     }
     console.log(user_projects)
     console.log(recent_projects)
+    userInfoStore.setSearchResults(
+      recent_projects.value,
+      user_projects.value,
+      user_avatar.value,
+      username.value,
+    )
   } catch (error) {
     alert(error)
     user_projects.value = []

@@ -16,7 +16,7 @@ const searchStore = useSearchStore()
 const { filteredProjects, projects, avatar, username } = storeToRefs(searchStore)
 
 const activeStatusFilter = ref('All')
-const statuses = ['All', 'Not Started', 'In Progress', 'Completed']
+const availableStatuses = ['All', 'Not Started', 'In Progress', 'Completed']
 
 const sortCriteria = ref('dateDesc')
 
@@ -75,11 +75,12 @@ const finalDisplayProjects = computed(() => {
     <div v-if="filteredProjects.length > 0">
       <h1>Search Results:</h1>
       <div class="controls-bar">
+        <div class="control-text">Sort By:</div>
         <select v-model="sortCriteria" class="sort-dropdown">
-          <option value="dateDesc">Sort: Newest First</option>
-          <option value="dateAsc">Sort: Oldest First</option>
-          <option value="nameAsc">Sort: Name (A-Z)</option>
-          <option value="membersDesc">Sort: Members (Most First)</option>
+          <option value="dateDesc">Newest First</option>
+          <option value="dateAsc">Oldest First</option>
+          <option value="nameAsc">Name (A-Z)</option>
+          <option value="membersDesc">Members (Most First)</option>
         </select>
 
         <div class="status-filter-buttons">
@@ -156,6 +157,7 @@ h1 {
 
 /* Status Filter Buttons Container */
 .status-filter-buttons {
+  margin-left: 50px;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -266,5 +268,9 @@ h1 {
 }
 .status-indicator.completed {
   color: #28a745; /* Green */
+}
+
+.control-text {
+  font-size: 1.2em;
 }
 </style>
