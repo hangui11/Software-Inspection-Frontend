@@ -1,0 +1,294 @@
+import { ID, Client, Account, Databases, Query } from 'appwrite'
+
+export const appwriteConfig = {
+  endpoints: 'https://fra.cloud.appwrite.io/v1',
+  projectId: '69077b0f000a7c658f1f',
+  databaseId: '69077bac0022f04161c1',
+  userCollectionId: 'users',
+  userProjectsCollectionId: 'user_projects',
+  projectCollectionId: 'projects',
+}
+
+const client = new Client()
+
+client.setEndpoint(appwriteConfig.endpoints).setProject(appwriteConfig.projectId) // Replace with your project ID
+
+const account = new Account(client)
+const databases = new Databases(client)
+
+export const signIn = async (email, password) => {
+  try {
+    const session = await account.createEmailPasswordSession(email, password)
+    return session
+  } catch (error) {
+    const user = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      [Query.equal('email', email)],
+    )
+    // alert(error.message)
+    if (user.documents[0]) throw new Error('Wrong password')
+    else if (!user.documents[0]) throw new Error('Not exist the user with email: ' + email)
+    else throw error
+  }
+}
+
+export const logOut = async () => {
+  try {
+    const session = await account.deleteSession('current')
+    return session
+  } catch (error) {
+    return null
+    // alert(error.message)
+  }
+}
+
+export const signUp = async (email, password, username, avatarURL) => {
+  try {
+    const taken = await existUserOrEmail(username, email)
+    if (taken) throw new Error('Username or Email is already taken')
+
+    const newAccount = await account.create(ID.unique(), email, password, username)
+    if (!newAccount) throw new Error('Account creation failed')
+
+    // await account.createEmailPasswordSession(email, password)
+
+    const newUser = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      ID.unique(),
+      {
+        username: username,
+        email: email,
+        password: password,
+        avatar: avatarURL,
+        account_id: newAccount.$id,
+      },
+    )
+    return newUser
+  } catch (error) {
+    console.log(error)
+    throw new Error(error)
+  }
+}
+
+export const getCurrentUser = async () => {
+  try {
+    const currentAccount = await account.get()
+
+    if (!currentAccount) throw new Error('No exist login account')
+
+    const currentUser = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      [Query.equal('account_id', currentAccount.$id)],
+    )
+    if (!currentUser) throw new Error('No exist user related with account')
+    return currentUser.documents[0]
+  } catch (error) {
+    alert('Do not have user logged' + error)
+  }
+}
+
+export const existCurrentUser = async () => {
+  try {
+    const currentAccount = await account.get()
+    // console.log(currentAccount)
+
+    if (!currentAccount) return false
+
+    const currentUser = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      [Query.equal('account_id', currentAccount.$id)],
+    )
+    if (!currentUser) return false
+    return true
+  } catch (error) {
+    // alert('Error ' + error)
+    console.log(error)
+    return false
+  }
+}
+
+export const existUserOrEmail = async (username, email) => {
+  try {
+    const result = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      [
+        // 🔑 KEY STEP: Use Query.or() to combine two equality checks
+        Query.or([
+          // Check 1: Does the document's 'username' field match the input_value?
+          Query.equal('username', username),
+
+          // Check 2: Does the document's 'email' field match the input_value?
+          Query.equal('email', email),
+        ]),
+
+        // Optional: Limit the search to 1, since we only care if one exists
+        Query.limit(1),
+      ],
+    )
+    return result.total > 0
+  } catch (error) {
+    console.error('Error checking username:', error.message)
+    throw new Error('Error checking username')
+  }
+}
+
+export const verification = async () => {
+  account.createVerification('https://sunshine-movies.vercel.app/verfication')
+}
+
+export const forgotPassword = async (email) => {
+  try {
+    await account.createRecovery(email, 'http://localhost:5173/forgotPassword')
+  } catch (error) {
+    console.log(error)
+    throw new Error(error)
+  }
+}
+
+export const resetPassword = async (secret, user_id, password) => {
+  try {
+    await account.updateRecovery(user_id, secret, password)
+  } catch (error) {
+    console.log(error)
+    throw new Error(error)
+  }
+}
+
+export const getUserEmail = async (user_id) => {
+  console.log(user_id)
+  try {
+    const result = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      [Query.equal('account_id', user_id)],
+    )
+    const user = result.documents[0]
+
+    console.log(user)
+    return user.email
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+export const getUserProjects = async (username) => {
+  try {
+    const userProjects = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userProjectsCollectionId,
+      [Query.equal('user_id', username)],
+    )
+    const projectIds = userProjects.documents.map((doc) => doc.project_id)
+    // console.log(projectIds)
+    const projects = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectCollectionId,
+      [Query.contains('$id', projectIds), Query.orderDesc('update_date')],
+    )
+    // console.log(projects.documents)
+    return projects.documents
+  } catch (error) {
+    console.log(error)
+    throw new Error(error)
+  }
+}
+
+export const createProject = async (project_name, username) => {
+  const todayDateTime = new Date().toISOString()
+  try {
+    const existProject = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectCollectionId,
+      [Query.equal('project_name', project_name), Query.limit(1)],
+    )
+
+    if (existProject.total > 0) {
+      throw new Error(`The project with name ${project_name} is already used.`)
+    }
+
+    const newProject = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectCollectionId,
+      ID.unique(),
+      {
+        project_name: project_name,
+        members: 1,
+        update_date: todayDateTime,
+      },
+    )
+    console.log('Project created successfully:', newProject)
+
+    const newUserProject = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.userProjectsCollectionId,
+      ID.unique(),
+      {
+        project_id: newProject.$id,
+        user_id: username,
+        user_role: 'owner',
+      },
+    )
+    console.log('User-Project link created:', newUserProject)
+    return newProject
+  } catch (error) {
+    console.log('Error creating project:', error)
+    throw error
+  }
+}
+
+// Assuming databases, appwriteConfig, ID, Query, Permission, and Role are imported
+
+export const joinProject = async (project_id, username, role) => {
+  try {
+    // --- 1. CONCURRENT VALIDATION ---
+    // Run both validation checks (Project Exists AND User Not Already Joined)
+    // concurrently using Promise.all for faster execution.
+    const [projectsResult, existUserProject] = await Promise.all([
+      // Check 1: Project Exists
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.projectCollectionId, [
+        Query.equal('$id', project_id),
+        Query.limit(1),
+      ]),
+      // Check 2: User Not Already Joined
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.userProjectsCollectionId, [
+        Query.equal('user_id', username),
+        Query.equal('project_id', project_id),
+        Query.limit(1),
+      ]),
+    ])
+
+    // --- 2. VALIDATION CHECKS (Sequential) ---
+
+    // Check A: Project Existence
+    if (projectsResult.total === 0) {
+      throw new Error(`Project with ID ${project_id} not found.`)
+    }
+
+    // Check B: User Duplication (FIXED: access the total property)
+    if (existUserProject.total > 0) {
+      throw new Error(`The user ${username} is already in the project.`)
+    }
+
+    // --- 3. CREATE NEW LINK DOCUMENT ---
+    const newUserProject = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.userProjectsCollectionId,
+      ID.unique(),
+      {
+        project_id: project_id,
+        user_id: username,
+        user_role: role,
+      },
+    )
+    console.log('User-Project link created:', newUserProject)
+    return newUserProject
+  } catch (error) {
+    console.error('Error creating user project link:', error)
+    throw error
+  }
+}
