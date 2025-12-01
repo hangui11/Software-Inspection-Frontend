@@ -8,6 +8,10 @@ export const appwriteConfig = {
   userCollectionId: 'users',
   userProjectsCollectionId: 'user_projects',
   projectCollectionId: 'projects',
+  engineersDataCollectionId: 'engineers_data', // <-- Update this with your actual engineers collection ID
+  defectsCollectionId: 'defects', // <-- Update this with your actual defects collection ID
+  productsCollectionId: 'products', // <-- Update this with your actual products collection ID
+  storageBucketId: 'project_files'
 }
 
 const client = new Client()
@@ -16,6 +20,7 @@ client.setEndpoint(appwriteConfig.endpoints).setProject(appwriteConfig.projectId
 const account = new Account(client)
 const databases = new Databases(client)
 const storage = new Storage(client)
+
 
 export const signIn = async (email, password) => {
   try {
@@ -339,5 +344,183 @@ export const getProjectAllUsers = async (project_id) => {
   } catch (error) {
     console.error('Error fetching project user data:', error)
     return []
+  }
+}
+
+
+// 1. Fetch all data for the project
+export const getProjectData = async (projectId) => {
+  try {
+    const [engineers, defects, products] = await Promise.all([
+      databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.engineersDataCollectionId,
+        [Query.equal('projectId', projectId)]
+      ),
+      databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.defectsCollectionId,
+        [Query.equal('projectId', projectId)]
+      ),
+      // Optional: Fetch products from DB if you store them there
+      databases.listDocuments(
+         appwriteConfig.databaseId,
+         appwriteConfig.productsCollectionId,
+         [Query.equal('projectId', projectId)]
+      )
+    ])
+    return {
+      engineers: engineers.documents,
+      defects: defects.documents,
+      products: products.documents
+    }
+  } catch (error) {
+    console.error("Error fetching data:", error)
+    return { engineers: [], defects: [], products: [] }
+  }
+}
+
+// 2. Add Defect Transaction (Add Defect + Update/Create Engineer Row)
+export const addDefectTransaction = async (defectData, engineerData) => {
+  // eslint-disable-next-line no-useless-catch
+  try {
+    // A. Create Defect
+    const newDefect = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.defectsCollectionId,
+      ID.unique(),
+      defectData
+    )
+
+    // B. Check/Update Engineer Data
+    const existing = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.engineersDataCollectionId,
+      [
+        Query.equal('projectId', engineerData.projectId),
+        Query.equal('userId', engineerData.userId)
+      ]
+    )
+
+    if (existing.total > 0) {
+      // Update existing
+      const doc = existing.documents[0]
+      await databases.updateDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.engineersDataCollectionId,
+        doc.$id,
+        {
+          major: doc.major + (defectData.severity === 'Major' ? 1 : 0),
+          minor: doc.minor + (defectData.severity === 'Minor' ? 1 : 0)
+        }
+      )
+    } else {
+      // Create new
+      await databases.createDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.engineersDataCollectionId,
+        ID.unique(),
+        {
+          projectId: engineerData.projectId,
+          userId: engineerData.userId,
+          productId: engineerData.productId,
+          major: defectData.severity === 'Major' ? 1 : 0,
+          minor: defectData.severity === 'Minor' ? 1 : 0,
+          size: 0,
+          time: 0,
+          rate: 0,
+          est_yield: 0
+        }
+      )
+    }
+    return newDefect
+  } catch (error) {
+    throw error
+  }
+}
+
+// 3. Update Engineer Info (Size/Time)
+export const updateEngineerInfo = async (projectId, userId, size, time) => {
+  const existing = await databases.listDocuments(
+    appwriteConfig.databaseId,
+    appwriteConfig.engineersDataCollectionId,
+    [
+      Query.equal('projectId', projectId),
+      Query.equal('userId', userId)
+    ]
+  )
+
+  if (existing.total === 0) throw new Error("No engineer record found.")
+
+  const doc = existing.documents[0]
+
+  // Calculations
+  const timeHours = time / 60
+  const rate = timeHours > 0 ? (size / timeHours).toFixed(2) : 0
+  const est_yield = 85.0 // Placeholder logic
+
+  await databases.updateDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.engineersDataCollectionId,
+    doc.$id,
+    {
+      size: Number(size),
+      time: Number(time),
+      rate: Number(rate),
+      est_yield: Number(est_yield)
+    }
+  )
+}
+
+// 4. Helper to get Username
+export const getUsernameById = async (userId) => {
+  try {
+     const userDocs = await databases.listDocuments(
+       appwriteConfig.databaseId,
+       appwriteConfig.userCollectionId,
+       [Query.equal('account_id', userId)]
+     )
+     return userDocs.total > 0 ? userDocs.documents[0].username : 'Unknown'
+  } catch (e) { return 'Unknown' }
+}
+
+export const uploadFileToStorage = async (file) => {
+  try {
+    const result = await storage.createFile(
+      appwriteConfig.storageBucketId,
+      ID.unique(),
+      file
+    )
+    return result // Contains $id (the fileId)
+  } catch (error) {
+    console.error("Upload failed", error)
+    throw error
+  }
+}
+
+export const getFileView = (fileId) => {
+  if (!fileId) return null
+  // Returns a URL to view/download the file
+  return storage.getFileView(appwriteConfig.storageBucketId, fileId)
+}
+
+export const createProductDocument = async (projectId, fileName) => {
+  try {
+    const newProduct = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.productsCollectionId,
+      ID.unique(),
+      {
+        projectId: projectId,
+        name: fileName,
+        fileId: fileId,
+        type: fileType, // e.g. 'pdf' or 'text'
+        content: null // You might store raw text here if it's a txt file, otherwise use fileId
+      }
+    )
+    return newProduct
+  } catch (error) {
+    console.error("Create product failed", error)
+    throw error
   }
 }

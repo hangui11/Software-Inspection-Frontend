@@ -5,6 +5,10 @@ import { storeToRefs } from 'pinia'
 import { userInformationStore } from '@/store/searchStore'
 import share_icon from '@/assets/icons/share.png'
 import ShareWindow from './ShareWindow.vue'
+
+import { createProductDocument, getProjectData, addDefectTransaction } from '@/lib/appwrite'
+
+
 // --- ROUTER PARAMS & INITIAL DATA FETCH ---
 
 const props = defineProps({
@@ -19,6 +23,8 @@ const route = useRoute()
 const userInfoStore = userInformationStore()
 
 const projectId = ref(null)
+const productId = ref(null)
+
 const {
   recent_projects: recent_projects_stored,
   projects: projects_stored,
@@ -28,6 +34,8 @@ const {
 } = storeToRefs(userInfoStore)
 
 const current_project = ref('')
+const current_product = ref('')
+
 const copyStatus = ref('initial')
 
 const isModalOpen = ref(false)
@@ -38,22 +46,36 @@ const showShareWindow = () => {
   console.log('Modal state updated to:', isModalOpen.value)
 }
 
-onMounted(() => {
+
+const projectEngineers = ref([])
+const projectDefects = ref([])
+const projectProducts = ref([])
+
+onMounted(async () => {
   const idFromRoute = route.params.project_id
-  console.log(idFromRoute)
 
   if (idFromRoute) {
     projectId.value = idFromRoute
 
-    // 🔑 FIX: Use .find() to return the single project object
-    current_project.value = projects_stored.value.find((p) => p.$id === projectId.value)
+    current_project.value = projects_stored.value.find(
+      (p) => p.$id === projectId.value
+    )
 
-    // Check if the project was actually found for debugging
     if (!current_project.value) {
       console.error('Project not found with ID:', projectId.value)
     }
   }
+
+  // 🔥 Correct: Await the async data fetching
+  const { engineers, defects, products } = await getProjectData(idFromRoute)
+
+  // Assign them to your refs/reactive state (if you have them)
+  projectEngineers.value = engineers
+  projectDefects.value = defects
+  projectProducts.value = products
 })
+
+console.log('projects defects:', projectDefects.value)
 
 onUnmounted(() => {})
 
@@ -206,7 +228,12 @@ const handleFileUpload = (event) => {
   event.target.value = '' // Reset input
 }
 
-const finishUpload = (product) => {
+const finishUpload = async (product) => {
+  // const newProductDoc = await createProductDocument(
+  //     projectId.value,
+  //     product.name,
+  // )
+
   products.value.push(product) // Use .value for mutation
   activeProductId.value = product.id // Use .value for assignment
 }
@@ -500,9 +527,9 @@ const addDefect = () => {
                 <th class="col-xl">Desc</th>
                 <th>Maj</th>
                 <th>Min</th>
-                <th>DB</th>
-                <th>BP</th>
-                <th>PA</th>
+                <th v-for="col in engineerColumns" :key="col.userId">{{ col.name }}</th>
+                <th>A</th>
+                <th>B</th>
               </tr>
             </thead>
             <tbody>
@@ -521,9 +548,9 @@ const addDefect = () => {
                 <td colspan="2" class="text-right label-cell">Total</td>
                 <td class="text-center">{{ defectTotals.maj }}</td>
                 <td class="text-center">{{ defectTotals.min }}</td>
-                <td class="text-center">{{ defectTotals.db }}</td>
-                <td class="text-center">{{ defectTotals.bp }}</td>
-                <td class="text-center">{{ defectTotals.pa }}</td>
+                <td v-for="col in engineerColumns" :key="col.userId" class="text-center">
+                   {{ defectTotals[col.userId] }}
+                </td>
               </tr>
               <tr class="summary-row unique-row">
                 <td colspan="2" class="text-right label-cell">Unique</td>
@@ -536,8 +563,10 @@ const addDefect = () => {
             </tfoot>
           </table>
         </div>
-        <button class="add-defect-btn" @click="showAddPopup = true">+ Add Defect</button>
-
+        <div class="action-buttons">
+          <button class="add-defect-btn" @click="showAddPopup = true">+ Add Defect</button>
+          <button class="complete-info-btn" @click="openEngineerPopup">Complete Engineer Info</button>
+        </div>
         <div v-if="showAddPopup" class="popup-overlay">
           <div class="popup">
             <h3>Add New Defect</h3>
@@ -562,12 +591,43 @@ const addDefect = () => {
             </div>
           </div>
         </div>
+         <div v-if="showEngineerPopup" class="popup-overlay">
+          <div class="popup">
+            <h3>Complete Engineer Info</h3>
+            <div class="form-group"><label>Size (LOC)</label><input type="number" v-model="engineerForm.size" class="input-field" /></div>
+            <div class="form-group"><label>Time (Minutes)</label><input type="number" v-model="engineerForm.time" class="input-field" /></div>
+            <div class="popup-buttons">
+              <button @click="saveEngineerInfo" class="add-btn">Update</button>
+              <button @click="showEngineerPopup=false" class="cancel-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+.complete-info-btn {
+  background-color: #f39c12;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.complete-info-btn:hover {
+  background-color: #e67e22;
+}
+
 .share-modal {
   height: 100%;
   width: 100%;

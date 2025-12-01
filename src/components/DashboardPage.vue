@@ -26,6 +26,7 @@ const props = defineProps({
   },
 })
 
+
 onMounted(() => {})
 
 onUnmounted(() => {})
@@ -145,7 +146,7 @@ const join_project_api = async () => {
             @click="
               router.push({
                 name: 'dashboard-project-ins-form',
-                params: { project_id: project.$id },
+                params: { project_id: project.$id, product_id: 'null' },
               })
             "
           >
