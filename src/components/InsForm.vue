@@ -294,6 +294,8 @@ const addDefect = () => {
 </script>
 
 <template>
+  <div class="share-modal"></div>
+
   <div class="app-container">
     <aside class="sidebar">
       <div class="header-container">
@@ -359,9 +361,9 @@ const addDefect = () => {
         </ul>
       </div>
 
-      <div class="share-component">
-        <h3>Share</h3>
-        <img :src="share_icon" width="32px" height="32px" />
+      <div class="share-component" @click="showShareWindow">
+        <h3 class="share-text-label">Share</h3>
+        <img :src="share_icon" alt="Share Icon" width="30" height="30" />
       </div>
     </aside>
 
@@ -547,6 +549,7 @@ const addDefect = () => {
   margin: 0% 3%;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 7px; /* Increase spacing */
   margin-bottom: 20px;
 }
@@ -672,17 +675,20 @@ const addDefect = () => {
 }
 
 .share-component {
-  margin-top: 10px;
   display: flex;
   align-items: center;
-  gap: 15px;
   justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #096dd9;
+  /* border-radius: 6px; */
   cursor: pointer;
-  border: solid wheat;
 }
 
-.share-component h3 {
+.share-component .share-text-label {
   margin: 0;
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* --- LAYOUT PANES --- */

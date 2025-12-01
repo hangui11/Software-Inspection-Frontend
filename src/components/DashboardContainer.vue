@@ -4,7 +4,8 @@ import { ref, onBeforeUnmount, onMounted, nextTick } from 'vue'
 import { useSearchStore } from '@/store/searchStore'
 import search from '@/assets/icons/search.png'
 import signout from '@/assets/icons/signout.svg'
-
+import lucky_coin from '@/assets/icons/lucky-coin.svg'
+import calendar from '@/assets/icons/calendar.svg'
 import { logOut } from '@/lib/appwrite'
 
 const router = useRouter()
@@ -78,17 +79,11 @@ const filterProjects = () => {
 
 const findAllRelatedProjects = () => {
   if (!input.value) {
-    alert('Please enter a project name to search.')
+    searchStore.setSearchResults(props.projects, props.projects, props.avatar, props.username)
+    router.push('/dashboard/project_query')
     return
   }
-  // searchStore.clearSearch()
-  const finalFilteredProjects = filteredProjects.value
-  const userProjects = props.projects
-
-  // 🔑 STEP 1: Save ALL necessary data to the store
-  searchStore.setSearchResults(finalFilteredProjects, userProjects, props.avatar, props.username)
-
-  // 🔑 STEP 2: Navigate to the destination component using its name
+  searchStore.setSearchResults(filteredProjects.value, props.projects, props.avatar, props.username)
   router.push('/dashboard/project_query')
 }
 
@@ -123,6 +118,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="nav-container">
     <div class="nav-logo">
+      <img :src="lucky_coin" width="40px" height="40px" class="icon" />
       <div class="name" @click="dashboard">Dashboard</div>
     </div>
 
@@ -158,6 +154,8 @@ onBeforeUnmount(() => {
         <img :src="props.avatar" width="45px" class="avatar" />
         <p class="username">{{ props.username }}</p>
       </div>
+
+      <img class="signout-icon" :src="calendar" @click="showCalendar" />
       <img class="signout-icon" :src="signout" @click="log_out" />
     </div>
   </div>
@@ -194,7 +192,7 @@ onBeforeUnmount(() => {
 .icon {
   height: 2.5rem;
   width: 2.5rem;
-  margin-right: 0.625rem;
+  /* margin-right: 0.625rem; */
   transition: all 0.3s ease-in-out;
 }
 
@@ -206,6 +204,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-size: 2rem;
   transition: all 0.3s ease-in-out;
+  gap: 10px;
 }
 
 .nav-logo:hover .icon {
@@ -213,7 +212,7 @@ onBeforeUnmount(() => {
 }
 
 .nav-logo:hover .name {
-  color: rgb(79, 91, 226);
+  color: rgba(233, 182, 100, 0.7);
 }
 
 .nav-user {
@@ -304,8 +303,13 @@ input#search {
   margin-right: 0.8rem;
 }
 
+.username {
+  font-size: large;
+  font-weight: bold;
+}
+
 .signout-icon {
-  width: 2rem;
+  width: 2.7rem;
   cursor: pointer;
   margin-left: 1.5rem;
 }

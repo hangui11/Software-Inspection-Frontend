@@ -159,6 +159,8 @@ const join_project_api = async () => {
           </div>
         </div>
       </div>
+
+      <VCalendar />
     </div>
   </div>
 </template>

@@ -9,6 +9,8 @@ import VueScrollTo from 'vue-scrollto'
 import { createNotivue } from 'notivue'
 import { createPinia } from 'pinia'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
+import VCalendar from 'v-calendar' // Note: Default export, not named export
+import 'v-calendar/style.css'
 
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginPage from './components/LoginPage.vue'
@@ -79,8 +81,8 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(process.env.BASE_URL), // remote
-  // history: createWebHistory(), // local
+  // history: createWebHistory(process.env.BASE_URL), // remote
+  history: createWebHistory(), // local
   routes,
   scrollBehavior(to, from, savedPosition) {
     return { top: 0 }
@@ -115,4 +117,5 @@ createApp(App)
   .use(notivue)
   .use(vuetify)
   .use(piniaStore)
+  .use(VCalendar, {})
   .mount('#app')
