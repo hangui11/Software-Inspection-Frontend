@@ -1,24 +1,42 @@
 <script setup>
 import { useRoute } from 'vue-router'
-import { ref, onMounted, computed, onBeforeUnmount } from 'vue' // Added computed, onBeforeUnmount
+import { ref, onMounted, computed, onBeforeUnmount, onUnmounted } from 'vue' // Added computed, onBeforeUnmount
 import { storeToRefs } from 'pinia'
 import { userInformationStore } from '@/store/searchStore'
 import share_icon from '@/assets/icons/share.png'
+import ShareWindow from './ShareWindow.vue'
 // --- ROUTER PARAMS & INITIAL DATA FETCH ---
+
+const props = defineProps({
+  loadProjects: {
+    type: Function, // If it's a function
+    required: false,
+    // Add default value if not required
+  },
+})
 
 const route = useRoute()
 const userInfoStore = userInformationStore()
-// 1. Correct the ref declaration: use ref(null) or ref('') instead of ref(ref)
+
 const projectId = ref(null)
 const {
   recent_projects: recent_projects_stored,
   projects: projects_stored,
   avatar: avatar_stored,
   username: username_stored,
+  userid: user_id_stored,
 } = storeToRefs(userInfoStore)
 
 const current_project = ref('')
 const copyStatus = ref('initial')
+
+const isModalOpen = ref(false)
+const modalContentRef = ref(null)
+
+const showShareWindow = () => {
+  isModalOpen.value = true
+  console.log('Modal state updated to:', isModalOpen.value)
+}
 
 onMounted(() => {
   const idFromRoute = route.params.project_id
@@ -36,6 +54,8 @@ onMounted(() => {
     }
   }
 })
+
+onUnmounted(() => {})
 
 // 🔑 Computed property for the text on the button/tooltip
 const copyMessage = computed(() => {
@@ -294,7 +314,11 @@ const addDefect = () => {
 </script>
 
 <template>
-  <div class="share-modal"></div>
+  <div v-if="isModalOpen" class="share-modal" @click.self="isModalOpen = false">
+    <div ref="modalContentRef">
+      <ShareWindow :projectId="projectId" :userId="user_id_stored" />
+    </div>
+  </div>
 
   <div class="app-container">
     <aside class="sidebar">
@@ -363,7 +387,7 @@ const addDefect = () => {
 
       <div class="share-component" @click="showShareWindow">
         <h3 class="share-text-label">Share</h3>
-        <img :src="share_icon" alt="Share Icon" width="30" height="30" />
+        <img class="share-icon" :src="share_icon" alt="Share Icon" width="30" height="30" />
       </div>
     </aside>
 
@@ -544,7 +568,19 @@ const addDefect = () => {
 </template>
 
 <style scoped>
-/* Add this to your <style> block in the component */
+.share-modal {
+  height: 100%;
+  width: 100%;
+  position: fixed;
+  display: flex;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
 .header-container {
   margin: 0% 3%;
   display: flex;
@@ -680,15 +716,23 @@ const addDefect = () => {
   justify-content: center;
   gap: 8px;
   padding: 8px 12px;
-  background-color: #096dd9;
+  background-color: rgb(9, 109, 217);
   /* border-radius: 6px; */
   cursor: pointer;
+}
+
+.share-component:hover {
+  background-color: rgba(9, 109, 217, 0.5);
 }
 
 .share-component .share-text-label {
   margin: 0;
   font-weight: 600;
   line-height: 1;
+}
+
+.share-icon {
+  filter: brightness(0) invert(1);
 }
 
 /* --- LAYOUT PANES --- */

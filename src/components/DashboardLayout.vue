@@ -43,6 +43,7 @@ const {
   projects: projects_stored,
   avatar: avatar_stored,
   username: username_stored,
+  userid: userid_stored,
 } = storeToRefs(userInfoStore)
 
 const updatePageHeight = () => {
@@ -56,13 +57,20 @@ onMounted(async () => {
     !recent_projects_stored.value || recent_projects_stored.value.length === 0
   const isUsernameMissing = !username_stored.value
   const isAvatarMissing = !avatar_stored.value
-  if (isProjectsMissing || isRecentProjectsMissing || isUsernameMissing || isAvatarMissing) {
+  const isUserIdMissing = !userid_stored.value
+  if (
+    isProjectsMissing ||
+    isRecentProjectsMissing ||
+    isUsernameMissing ||
+    isAvatarMissing ||
+    isUserIdMissing
+  ) {
     try {
       const current_user = await getCurrentUser()
       console.log(current_user)
       username.value = current_user.username
       user_avatar.value = current_user.avatar
-      user_id.value = current_user.user_id
+      user_id.value = current_user.$id
     } catch (error) {
       alert('Do not have user logged ' + error)
     }
@@ -74,6 +82,7 @@ onMounted(async () => {
     recent_projects.value = recent_projects_stored.value
     user_avatar.value = avatar_stored.value
     username.value = username_stored.value
+    user_id.value = userid_stored
     isLoading.value = false
   }
 })
@@ -84,7 +93,7 @@ onUnmounted(async () => {
 
 const loadProjects = async () => {
   try {
-    user_projects.value = await getUserProjects(username.value)
+    user_projects.value = await getUserProjects(user_id.value)
     console.log('User projects fetched in DashboardContainer:', user_projects)
     recent_projects.value = user_projects.value.slice(0, 3) // Get the 3 most recent projects
     if (recent_projects.value.length < 3) {
@@ -105,6 +114,7 @@ const loadProjects = async () => {
       user_projects.value,
       user_avatar.value,
       username.value,
+      user_id.value,
     )
   } catch (error) {
     alert(error)

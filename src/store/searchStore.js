@@ -34,18 +34,20 @@ export const userInformationStore = defineStore('user_information', {
     projects: [],
     avatar: '',
     username: '',
+    userid: '',
   }),
   actions: {
-    setSearchResults(recent_projects, projects, avatarUrl, userName) {
+    setSearchResults(recent_projects, projects, avatarUrl, userName, userId) {
       ;((this.recent_projects = recent_projects),
         (this.projects = projects),
         (this.avatar = avatarUrl),
-        (this.username = userName))
+        (this.username = userName),
+        (this.userid = userId))
     },
   },
   persist: {
     enabled: true,
     storage: sessionStorage,
-    paths: ['avatar', 'username', 'projects', 'recent_projects'], // Persist all user-related data
+    paths: ['avatar', 'username', 'userid', 'projects', 'recent_projects'], // Persist all user-related data
   },
 })

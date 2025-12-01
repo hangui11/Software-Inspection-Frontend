@@ -16,7 +16,7 @@ const userInfoStore = userInformationStore()
 const selectedRole = ref('reviewer') // Default value
 const roles = ref(['moderator', 'reviewer', 'instructor'])
 
-const { recent_projects, projects, avatar, username } = storeToRefs(userInfoStore)
+const { recent_projects, projects, avatar, username, userid } = storeToRefs(userInfoStore)
 const user_recent_projects = ref(recent_projects)
 
 const props = defineProps({
@@ -50,7 +50,7 @@ const create_project_api = async () => {
     return
   }
   try {
-    const create_project_session = await createProject(project_input.value, username.value)
+    const create_project_session = await createProject(project_input.value, userid.value)
     console.log(create_project_session)
   } catch (error) {
     alert(error)
@@ -67,7 +67,7 @@ const join_project_api = async () => {
   try {
     const join_project_session = await joinProject(
       project_input.value,
-      username.value,
+      userid.value,
       selectedRole.value,
     )
     console.log(join_project_session)
@@ -120,13 +120,16 @@ const join_project_api = async () => {
     </div>
 
     <div class="body">
-      <div class="create-join-project">
-        <h2>Initiate a New Project</h2>
-        <p>Start a new project or join an existing one to collaborate with your team.</p>
-        <div class="project-buttons">
-          <button @click="showProjectWindow(1)">Create New Project</button>
-          <button @click="showProjectWindow(2)">Join Existing Project</button>
+      <div class="header-body">
+        <div class="create-join-project">
+          <h2>Initiate a New Project</h2>
+          <p>Start a new project or join an existing one to collaborate with your team.</p>
+          <div class="project-buttons">
+            <button @click="showProjectWindow(1)">Create New Project</button>
+            <button @click="showProjectWindow(2)">Join Existing Project</button>
+          </div>
         </div>
+        <VCalendar />
       </div>
 
       <div class="recent-projects">
@@ -159,8 +162,6 @@ const join_project_api = async () => {
           </div>
         </div>
       </div>
-
-      <VCalendar />
     </div>
   </div>
 </template>
@@ -186,6 +187,11 @@ const join_project_api = async () => {
   margin: 3% 13%;
 }
 
+.header-body {
+  display: flex;
+  justify-content: space-between;
+}
+
 p {
   font-size: large;
   font-weight: 500;
@@ -206,10 +212,6 @@ button {
 
 button:hover {
   background-color: rgba(0, 0, 0, 0.2);
-}
-
-.recent-projects {
-  margin-top: 4rem;
 }
 
 .projects-container {

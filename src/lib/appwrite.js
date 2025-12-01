@@ -1,4 +1,5 @@
 import { ID, Client, Account, Databases, Query, Storage } from 'appwrite'
+import { data } from 'autoprefixer'
 
 export const appwriteConfig = {
   endpoints: 'https://fra.cloud.appwrite.io/v1',
@@ -165,7 +166,7 @@ export const getUserEmail = async (user_id) => {
     const result = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.userCollectionId,
-      [Query.equal('account_id', user_id)],
+      [Query.equal('$id', user_id)],
     )
     const user = result.documents[0]
 
@@ -198,7 +199,7 @@ export const getUserProjects = async (username) => {
   }
 }
 
-export const createProject = async (project_name, username) => {
+export const createProject = async (project_name, userid) => {
   const todayDateTime = new Date().toISOString()
   try {
     const existProject = await databases.listDocuments(
@@ -229,7 +230,7 @@ export const createProject = async (project_name, username) => {
       ID.unique(),
       {
         project_id: newProject.$id,
-        user_id: username,
+        user_id: userid,
         user_role: 'owner',
       },
     )
@@ -243,7 +244,7 @@ export const createProject = async (project_name, username) => {
 
 // Assuming databases, appwriteConfig, ID, Query, Permission, and Role are imported
 
-export const joinProject = async (project_id, username, role) => {
+export const joinProject = async (project_id, userid, role) => {
   try {
     // --- 1. CONCURRENT VALIDATION ---
     // Run both validation checks (Project Exists AND User Not Already Joined)
@@ -256,7 +257,7 @@ export const joinProject = async (project_id, username, role) => {
       ]),
       // Check 2: User Not Already Joined
       databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.userProjectsCollectionId, [
-        Query.equal('user_id', username),
+        Query.equal('user_id', userid),
         Query.equal('project_id', project_id),
         Query.limit(1),
       ]),
@@ -304,5 +305,39 @@ export function formatAppwriteDate(isoString) {
   } catch (e) {
     console.error('Date parsing error:', e)
     return 'Invalid Date'
+  }
+}
+
+export const getProjectAllUsers = async (project_id) => {
+  try {
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userProjectsCollectionId,
+      [Query.equal('project_id', project_id)],
+    )
+    const projectUserDocs = response.documents
+    const finalUsers = []
+
+    for (const doc of projectUserDocs) {
+      const userId = doc.user_id
+      const userRole = doc.user_role
+
+      if (userId) {
+        try {
+          const userEmail = await getUserEmail(userId)
+          finalUsers.push({
+            id: userId,
+            email: userEmail,
+            role: userRole,
+          })
+        } catch (userError) {
+          console.warn(`Could not fetch details for user ID ${userId}:`, userError)
+        }
+      }
+    }
+    return finalUsers
+  } catch (error) {
+    console.error('Error fetching project user data:', error)
+    return []
   }
 }
