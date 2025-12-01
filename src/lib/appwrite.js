@@ -8,10 +8,10 @@ export const appwriteConfig = {
   userCollectionId: 'users',
   userProjectsCollectionId: 'user_projects',
   projectCollectionId: 'projects',
-  engineersDataCollectionId: 'engineers_data', // <-- Update this with your actual engineers collection ID
+  engineersDataCollectionId: 'enigineers_data', // <-- Update this with your actual engineers collection ID
   defectsCollectionId: 'defects', // <-- Update this with your actual defects collection ID
   productsCollectionId: 'products', // <-- Update this with your actual products collection ID
-  storageBucketId: 'project_files'
+  storageBucketId: '6926e205001c81bfb74a'
 }
 
 const client = new Client()
@@ -313,6 +313,35 @@ export function formatAppwriteDate(isoString) {
   }
 }
 
+
+// --- STORAGE FUNCTIONS ---
+
+export const uploadFileToStorage = async (file) => {
+  try {
+    const result = await storage.createFile(
+      appwriteConfig.storageBucketId,
+      ID.unique(),
+      file
+    )
+    return result // Returns file object (contains $id)
+  } catch (error) {
+    console.error("Storage Upload Error:", error)
+    throw error
+  }
+}
+
+export const getFileView = (fileId) => {
+  if (!fileId) return null
+  // Returns the URL to view the file
+  return storage.getFileView(appwriteConfig.storageBucketId, fileId)
+}
+
+export const getFileDownload = (fileId) => {
+  if (!fileId) return null
+  return storage.getFileDownload(appwriteConfig.storageBucketId, fileId)
+}
+
+// --- ADDITIONAL HELPERS ---
 export const getProjectAllUsers = async (project_id) => {
   try {
     const response = await databases.listDocuments(
@@ -369,6 +398,7 @@ export const getProjectData = async (projectId) => {
          [Query.equal('projectId', projectId)]
       )
     ])
+
     return {
       engineers: engineers.documents,
       defects: defects.documents,
@@ -380,7 +410,78 @@ export const getProjectData = async (projectId) => {
   }
 }
 
-// 2. Add Defect Transaction (Add Defect + Update/Create Engineer Row)
+
+// 1. Fetch Initial Project Data (Products List)
+export const getProjectProducts = async (projectId) => {
+    try {
+        const products = await databases.listDocuments(
+            appwriteConfig.databaseId,
+            appwriteConfig.productsCollectionId,
+            [Query.equal('projectId', projectId)]
+        )
+        return products.documents
+    } catch (error) {
+        console.error("Error fetching products:", error)
+        return []
+    }
+}
+
+// 2. Create Product (After file upload)
+export const createProductDocument = async (projectId, userId, fileName, fileId, mimeType) => {
+  try {
+    const newProduct = await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.productsCollectionId,
+      ID.unique(),
+      {
+        projectId: projectId,
+        userId: userId,
+        // Assuming you added these columns to 'products' collection based on requirement
+        name: fileName,
+        fileId: fileId,
+        mimeType: mimeType
+      }
+    )
+    return newProduct
+  } catch (error) {
+    console.error("Error creating product doc:", error)
+    throw error
+  }
+}
+
+// 3. Fetch Specific Product Data (Engineers + Defects)
+export const getProductData = async (projectId, productId) => {
+  try {
+    const [engineers, defects] = await Promise.all([
+      databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.engineersDataCollectionId,
+        [
+            Query.equal('projectId', projectId),
+            Query.equal('productId', productId)
+        ]
+      ),
+      databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.defectsCollectionId,
+        [
+            Query.equal('projectId', projectId),
+            Query.equal('productId', productId)
+        ]
+      )
+    ])
+
+    return {
+      engineers: engineers.documents,
+      defects: defects.documents
+    }
+  } catch (error) {
+    console.error("Error fetching product data:", error)
+    return { engineers: [], defects: [] }
+  }
+}
+
+// 4. Add Defect Transaction
 export const addDefectTransaction = async (defectData, engineerData) => {
   // eslint-disable-next-line no-useless-catch
   try {
@@ -398,6 +499,7 @@ export const addDefectTransaction = async (defectData, engineerData) => {
       appwriteConfig.engineersDataCollectionId,
       [
         Query.equal('projectId', engineerData.projectId),
+        Query.equal('productId', engineerData.productId),
         Query.equal('userId', engineerData.userId)
       ]
     )
@@ -439,13 +541,14 @@ export const addDefectTransaction = async (defectData, engineerData) => {
   }
 }
 
-// 3. Update Engineer Info (Size/Time)
-export const updateEngineerInfo = async (projectId, userId, size, time) => {
+// 5. Update Engineer Info
+export const updateEngineerInfo = async (projectId, productId, userId, size, time) => {
   const existing = await databases.listDocuments(
     appwriteConfig.databaseId,
     appwriteConfig.engineersDataCollectionId,
     [
       Query.equal('projectId', projectId),
+      Query.equal('productId', productId),
       Query.equal('userId', userId)
     ]
   )
@@ -457,7 +560,7 @@ export const updateEngineerInfo = async (projectId, userId, size, time) => {
   // Calculations
   const timeHours = time / 60
   const rate = timeHours > 0 ? (size / timeHours).toFixed(2) : 0
-  const est_yield = 85.0 // Placeholder logic
+  const est_yield = 85.0
 
   await databases.updateDocument(
     appwriteConfig.databaseId,
@@ -472,7 +575,7 @@ export const updateEngineerInfo = async (projectId, userId, size, time) => {
   )
 }
 
-// 4. Helper to get Username
+// 6. Auth Helpers
 export const getUsernameById = async (userId) => {
   try {
      const userDocs = await databases.listDocuments(
@@ -482,45 +585,4 @@ export const getUsernameById = async (userId) => {
      )
      return userDocs.total > 0 ? userDocs.documents[0].username : 'Unknown'
   } catch (e) { return 'Unknown' }
-}
-
-export const uploadFileToStorage = async (file) => {
-  try {
-    const result = await storage.createFile(
-      appwriteConfig.storageBucketId,
-      ID.unique(),
-      file
-    )
-    return result // Contains $id (the fileId)
-  } catch (error) {
-    console.error("Upload failed", error)
-    throw error
-  }
-}
-
-export const getFileView = (fileId) => {
-  if (!fileId) return null
-  // Returns a URL to view/download the file
-  return storage.getFileView(appwriteConfig.storageBucketId, fileId)
-}
-
-export const createProductDocument = async (projectId, fileName) => {
-  try {
-    const newProduct = await databases.createDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.productsCollectionId,
-      ID.unique(),
-      {
-        projectId: projectId,
-        name: fileName,
-        fileId: fileId,
-        type: fileType, // e.g. 'pdf' or 'text'
-        content: null // You might store raw text here if it's a txt file, otherwise use fileId
-      }
-    )
-    return newProduct
-  } catch (error) {
-    console.error("Create product failed", error)
-    throw error
-  }
 }
