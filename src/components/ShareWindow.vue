@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getUserEmail, getUserInfoById } from '@/lib/appwrite'
+import { getUserEmail } from '@/lib/appwrite'
 import user_icon from '@/assets/icons/user.svg'
 import { getProjectAllUsers, updateUserRoles, sendUserInvitations } from '@/lib/appwrite'
 const emit = defineEmits(['close'])
