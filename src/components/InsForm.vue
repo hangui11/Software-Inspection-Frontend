@@ -16,7 +16,14 @@ import {
   getUsernameById,
   uploadFileToStorage,
   getFileView,
-  getFileDownload
+  getFileDownload,
+  getProductChecklists,
+  createChecklist,
+  deleteChecklist,
+  updateChecklistShare,
+  addChecklistItemDB,
+  updateChecklistItemStatus,
+  deleteChecklistItemDB
 } from '@/lib/appwrite.js'
 
 // --- SETUP & ROUTE ---
@@ -99,6 +106,7 @@ const selectProduct = async (prod) => {
 
   // B. Load Data (Defects & Engineers)
   await loadProductData()
+  await loadChecklists()
 }
 
 const loadProductData = async () => {
@@ -238,54 +246,124 @@ const onDrag = (e) => {
 }
 const stopDrag = () => { isDraggingX.value = false; isDraggingY.value = false; window.removeEventListener('mousemove', onDrag); window.removeEventListener('mouseup', stopDrag) }
 
-// --- TABS LOGIC ---
+// --- TABS / CHECKLIST STATE ---
+const checklistTabs = ref([])
+const activeTabId = ref(null)
+const newChecklistInput = ref('')
 
+// Computed to find current object
 const currentTabObj = computed(() => {
   return checklistTabs.value.find((t) => t.id === activeTabId.value)
 })
 
-const activeTabId = ref(1)
-const newChecklistInput = ref('')
-const checklistTabs = ref([
-  {
-    id: 1,
-    name: 'Daily Setup',
-    isShared: true,
-    items: [{ text: 'Check Power', done: false }],
-  },
-])
-const setActiveTab = (id) => {
-  activeTabId.value = id
+// --- CHECKLIST LOGIC ---
+
+// 1. Load Checklists (Call this inside selectProduct or onMounted)
+const loadChecklists = async () => {
+  if (!activeProductId.value) return
+
+  const lists = await getProductChecklists(projectId.value, activeProductId.value)
+  checklistTabs.value = lists
+
+  // Set active tab to first one if exists
+  if (lists.length > 0 && !activeTabId.value) {
+    activeTabId.value = lists[0].id
+  }
 }
 
-const addNewTab = () => {
-  const name = prompt('Name:')
+// 2. Add New Tab
+const addNewTab = async () => {
+  const name = prompt('Name for new list:')
   if (name) {
-    const id = Date.now()
-    checklistTabs.value.push({ id, name, isShared: false, items: [] })
-    activeTabId.value = id
+    try {
+      const newList = await createChecklist(
+        projectId.value,
+        activeProductId.value,
+        currentUserId.value,
+        name
+      )
+      checklistTabs.value.push(newList)
+      activeTabId.value = newList.id
+    } catch (e) {
+      alert("Error creating list")
+    }
   }
 }
 
-const deleteCurrentTab = () => {
-  if (confirm('Delete list?')) {
-    const idx = checklistTabs.value.findIndex((t) => t.id === activeTabId.value)
-    checklistTabs.value.splice(idx, 1)
-    activeTabId.value = checklistTabs.value.length ? checklistTabs.value[0].id : null
+// 3. Delete Tab
+const deleteCurrentTab = async () => {
+  if (!currentTabObj.value) return
+  if (confirm('Delete this list and all its items?')) {
+    try {
+      const idToDelete = currentTabObj.value.id
+      await deleteChecklist(idToDelete)
+
+      // Remove from UI
+      const idx = checklistTabs.value.findIndex((t) => t.id === idToDelete)
+      checklistTabs.value.splice(idx, 1)
+
+      // Reset Active Tab
+      activeTabId.value = checklistTabs.value.length ? checklistTabs.value[0].id : null
+    } catch (e) {
+      alert("Error deleting list")
+    }
   }
 }
 
-const addChecklistItem = () => {
-  if (newChecklistInput.value.trim()) {
-    // currentTabObj is a computed property, use its value to mutate the array item
-    currentTabObj.value.items.push({ text: newChecklistInput.value, done: false })
-    newChecklistInput.value = ''
+// 4. Update Share Status (Watch Logic)
+// We watch the computed currentTabObj's isShared property
+import { watch } from 'vue'
+watch(
+  () => currentTabObj.value?.isShared,
+  async (newVal, oldVal) => {
+    if (newVal !== undefined && oldVal !== undefined && newVal !== oldVal) {
+      try {
+        await updateChecklistShare(currentTabObj.value.id, newVal)
+      } catch (e) { console.error("Share sync failed") }
+    }
+  }
+)
+
+const setActiveTab = (id) => { activeTabId.value = id }
+
+// --- ITEM LOGIC ---
+
+// 5. Add Item
+const addChecklistItem = async () => {
+  if (newChecklistInput.value.trim() && currentTabObj.value) {
+    try {
+      const newItem = await addChecklistItemDB(currentTabObj.value.id, newChecklistInput.value)
+      // Push returned DB item to UI
+      currentTabObj.value.items.push(newItem)
+      newChecklistInput.value = ''
+    } catch (e) {
+      console.error("Error adding item")
+    }
   }
 }
 
-const removeChecklistItem = (i) => {
-  currentTabObj.value.items.splice(i, 1)
+// 6. Remove Item
+const removeChecklistItem = async (idx) => {
+  const item = currentTabObj.value.items[idx]
+  try {
+    await deleteChecklistItemDB(item.id)
+    currentTabObj.value.items.splice(idx, 1)
+  } catch (e) {
+    console.error("Error deleting item")
+  }
 }
+
+// 7. Toggle Item Status (New helper)
+const updateItemStatus = async (item) => {
+  try {
+    await updateChecklistItemStatus(item.id, item.done)
+  } catch (e) {
+    console.error("Error updating status")
+    // Revert UI on error if needed
+    item.done = !item.done
+  }
+}
+
 </script>
 
 <template>
@@ -333,7 +411,8 @@ const removeChecklistItem = (i) => {
            </div>
         </div>
         <div class="resizer-horizontal" @mousedown.prevent="startDragY"><div class="handle-icon">···</div></div>
-       <div class="bottom-box" :style="{ height: 100 - topHeight + '%' }">
+       <div class="bottom-box" :style="{ height: (100 - topHeight) + '%' }">
+
           <div class="tabs-header">
             <div
               v-for="tab in checklistTabs"
@@ -342,24 +421,31 @@ const removeChecklistItem = (i) => {
               :class="{ active: activeTabId === tab.id }"
               @click="setActiveTab(tab.id)"
             >
-              {{ tab.name }} <span v-if="tab.isShared" class="shared-icon">👥</span>
+              {{ tab.name }}
+
+[Image of collaborative team icon]
+<span v-if="tab.isShared" class="shared-icon">👥</span>
             </div>
             <button class="add-tab-btn" @click="addNewTab">+</button>
           </div>
+
           <div class="tab-content" v-if="currentTabObj">
+
             <div class="list-controls">
-              <label class="share-toggle"
-                ><input type="checkbox" v-model="currentTabObj.isShared" /> Share Team</label
-              >
+              <label class="share-toggle">
+                <input type="checkbox" v-model="currentTabObj.isShared" /> Share Team
+              </label>
               <button class="delete-list-btn" @click="deleteCurrentTab">Delete</button>
             </div>
+
             <div class="checklist-items">
-              <div v-for="(item, idx) in currentTabObj.items" :key="idx" class="check-item">
-                <input type="checkbox" v-model="item.done" />
+              <div v-for="(item, idx) in currentTabObj.items" :key="item.id || idx" class="check-item">
+                <input type="checkbox" v-model="item.done" @change="updateItemStatus(item)" />
                 <span :class="{ strikethrough: item.done }">{{ item.text }}</span>
                 <button class="delete-item-btn" @click="removeChecklistItem(idx)">×</button>
               </div>
             </div>
+
             <div class="add-item-box">
               <input
                 v-model="newChecklistInput"
@@ -369,7 +455,8 @@ const removeChecklistItem = (i) => {
               <button @click="addChecklistItem">Add</button>
             </div>
           </div>
-       </div>
+
+        </div>
       </div>
 
       <div class="resizer-vertical" @mousedown.prevent="startDragX"></div>

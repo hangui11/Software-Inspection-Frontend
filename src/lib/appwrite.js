@@ -10,7 +10,9 @@ export const appwriteConfig = {
   projectCollectionId: 'projects',
   engineersDataCollectionId: 'enigineers_data', // <-- Update this with your actual engineers collection ID
   defectsCollectionId: 'defects', // <-- Update this with your actual defects collection ID
-  productsCollectionId: 'products', // <-- Update this with your actual products collection ID
+  productsCollectionId: 'products',
+  checklistsCollectionId: 'checklist',
+  checklistItemsCollectionId: 'checklist_items',
   storageBucketId: '6926e205001c81bfb74a'
 }
 
@@ -586,3 +588,123 @@ export const getUsernameById = async (userId) => {
      return userDocs.total > 0 ? userDocs.documents[0].username : 'Unknown'
   } catch (e) { return 'Unknown' }
 }
+
+
+// --- CHECKLIST FUNCTIONS ---
+
+// 1. Fetch Checklists and their Items
+export const getProductChecklists = async (projectId, productId) => {
+  try {
+    // A. Fetch the Lists (Tabs)
+    const listsResponse = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.checklistsCollectionId,
+      [
+        Query.equal('projectId', projectId),
+        Query.equal('productId', productId)
+      ]
+    )
+
+    const lists = listsResponse.documents
+
+    // B. For each list, fetch its items
+    // (Optimization: In a huge app, you might fetch all items at once, but this is safer for now)
+    const result = await Promise.all(lists.map(async (list) => {
+      const itemsResponse = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.checklistItemsCollectionId,
+        [Query.equal('checklistId', list.$id)]
+      )
+
+      return {
+        id: list.$id, // Map $id to id for your UI
+        name: list.name,
+        isShared: list.isShared,
+        items: itemsResponse.documents.map(item => ({
+          id: item.$id,
+          text: item.text,
+          done: item.done
+        }))
+      }
+    }))
+
+    return result
+  } catch (error) {
+    console.error("Error fetching checklists:", error)
+    return []
+  }
+}
+
+// 2. Create a New List (Tab)
+export const createChecklist = async (projectId, productId, userId, name) => {
+  const doc = await databases.createDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.checklistsCollectionId,
+    ID.unique(),
+    {
+      name: name,
+      isShared: false, // Default
+      projectId: projectId,
+      productId: productId,
+      userId: userId
+    }
+  )
+  // Return formatted object
+  return { id: doc.$id, name: doc.name, isShared: doc.isShared, items: [] }
+}
+
+// 3. Delete a List (Tab)
+export const deleteChecklist = async (checklistId) => {
+  // Optional: You should ideally delete all items linked to this list first
+  // For simplicity, we just delete the list doc here.
+  await databases.deleteDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.checklistsCollectionId,
+    checklistId
+  )
+}
+
+// 4. Update Share Status
+export const updateChecklistShare = async (checklistId, isShared) => {
+  await databases.updateDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.checklistsCollectionId,
+    checklistId,
+    { isShared: isShared }
+  )
+}
+
+// 5. Add an Item to a List
+export const addChecklistItemDB = async (checklistId, text) => {
+  const doc = await databases.createDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.checklistItemsCollectionId,
+    ID.unique(),
+    {
+      checklistId: checklistId,
+      text: text,
+      done: false
+    }
+  )
+  return { id: doc.$id, text: doc.text, done: doc.done }
+}
+
+// 6. Toggle Item Status (Done/Not Done)
+export const updateChecklistItemStatus = async (itemId, isDone) => {
+  await databases.updateDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.checklistItemsCollectionId,
+    itemId,
+    { done: isDone }
+  )
+}
+
+// 7. Delete an Item
+export const deleteChecklistItemDB = async (itemId) => {
+  await databases.deleteDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.checklistItemsCollectionId,
+    itemId
+  )
+}
+
