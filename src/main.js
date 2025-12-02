@@ -72,7 +72,7 @@ const routes = [
         props: true,
       },
       {
-        path: 'ins_form/:project_id',
+        path: 'ins_form/:project_id/:product_id',
         name: 'dashboard-project-ins-form',
         component: InsFormPage,
       },

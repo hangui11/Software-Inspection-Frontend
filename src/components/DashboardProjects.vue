@@ -96,7 +96,7 @@ const finalDisplayProjects = computed(() => {
           @click="
             router.push({
               name: 'dashboard-project-ins-form',
-              params: { project_id: project.$id },
+              params: { project_id: project.$id, product_id: 'null'},
             })
           "
         >

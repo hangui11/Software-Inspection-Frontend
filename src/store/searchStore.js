@@ -38,6 +38,7 @@ export const userInformationStore = defineStore('user_information', {
     avatar: '',
     username: '',
     userid: '',
+    products: [],
   }),
   actions: {
     setSearchResults(recent_projects, projects, avatarUrl, userName, userId) {
