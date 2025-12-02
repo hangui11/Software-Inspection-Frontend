@@ -364,6 +364,111 @@ const updateItemStatus = async (item) => {
   }
 }
 
+
+const uniqueDefects = computed(() => {
+  const uniqueMap = {}
+
+  // Group defects by their ID (defectId)
+  defects.value.forEach(d => {
+    const id = d.defectId
+
+    if (!uniqueMap[id]) {
+      // If we haven't seen this defect ID before, use this entry as the main one.
+      uniqueMap[id] = {
+        ...d,
+        foundBy: new Set([d.userId]), // Keep track of who found it
+        defectCount: 1
+      }
+    } else {
+      // If we have seen it, just add the user ID to the list.
+      uniqueMap[id].foundBy.add(d.userId)
+      uniqueMap[id].defectCount++
+    }
+  })
+
+  // Convert the map back to an array
+  return Object.values(uniqueMap).map(d => {
+    // Determine the user(s) who found it for display purposes
+    if (d.foundBy.size > 1) {
+      d.foundByNames = 'Multiple Engineers' // Or you could resolve all names
+    } else {
+      // Find the name of the single user who found it
+      const userId = Array.from(d.foundBy)[0]
+      d.foundByNames = resolvedEngineerNames.value[userId] || 'Unknown User'
+    }
+    return d
+  }).sort((a, b) => a.defectId - b.defectId) // Sort by defect ID
+})
+
+const meetingDuration = ref(0) // Duration of the meeting in minutes
+
+const inspectionSummary = computed(() => {
+  // 1. Group defects by their logical ID (defectId) to find overlaps
+  const defectMap = {}
+
+  defects.value.forEach(d => {
+    const id = d.defectId
+    if (!defectMap[id]) defectMap[id] = { me: false, others: false }
+
+    if (d.userId === currentUserId.value) {
+      defectMap[id].me = true
+    } else {
+      defectMap[id].others = true
+    }
+  })
+
+  // 2. Calculate A, B, C
+  let A = 0
+  let B = 0
+  let C = 0
+
+  Object.values(defectMap).forEach(status => {
+    if (status.me) A++           // Defects found by you (A)
+    if (status.others) B++       // Defects found by others (B)
+    if (status.me && status.others) C++ // Found by both (C)
+  })
+
+  // 3. Calculate Estimates
+  const numberFound = A + B - C // Unique defects found
+
+  let estimatedTotal = 0
+  if (C > 0) {
+    // Estimated Total = (A * B) / C
+    estimatedTotal = Math.round((A * B) / C)
+  } else {
+    // If C=0, we can't use the capture-recapture model, so we default to the number found.
+    estimatedTotal = numberFound
+  }
+
+  const numberLeft = Math.max(0, estimatedTotal - numberFound) // Defects left
+
+  // 4. Time & Size Metrics
+  // Total Size: Sum of size from engineer entries (e.g., total pages/LOC reviewed)
+  const totalSize = engineers.value.reduce((sum, eng) => sum + (eng.size || 0), 0)
+
+  // Total Prep Time (minutes): Sum of 'time' property from all engineer entries
+  const totalPrepMinutes = engineers.value.reduce((sum, eng) => sum + (eng.time || 0), 0)
+
+  // Total Minutes = Prep Time + Meeting Time
+  const totalMinutes = totalPrepMinutes + (parseFloat(meetingDuration.value) || 0)
+  const totalHours = totalMinutes / 60
+
+  // Overall Rate = Size / Hours
+  const rate = totalHours > 0 ? (totalSize / totalHours).toFixed(2) : 0
+
+  return {
+    A,
+    B,
+    C,
+    numberFound,
+    estimatedTotal,
+    numberLeft,
+    totalSize,
+    totalHours: totalHours.toFixed(2),
+    rate
+  }
+})
+
 </script>
 
 <template>
@@ -470,13 +575,13 @@ const updateItemStatus = async (item) => {
             </thead>
             <tbody>
               <tr v-for="(e, i) in engineers" :key="i">
-                <td>{{ resolvedEngineerNames[e.userId] || '...' }}</td>
-                <td>{{ e.major }}</td>
-                <td>{{ e.minor }}</td>
-                <td>{{ e.size }}</td>
-                <td>{{ e.time }}</td>
-                <td>{{ e.rate }}</td>
-                <td>{{ e.est_yield }}%</td>
+                <td class="text-center">{{ resolvedEngineerNames[e.userId] || '...' }}</td>
+                <td class="text-center">{{ e.major }}</td>
+                <td class="text-center">{{ e.minor }}</td>
+                <td class="text-center">{{ e.size }}</td>
+                <td class="text-center">{{ e.time }}</td>
+                <td class="text-center">{{ e.rate }}</td>
+                <td class="text-center">{{ e.est_yield }}%</td>
               </tr>
             </tbody>
           </table>
@@ -525,6 +630,62 @@ const updateItemStatus = async (item) => {
         <div class="action-buttons" v-if="activeProductId">
           <button class="add-defect-btn" @click="showAddPopup = true">+ Add Defect</button>
           <button class="complete-info-btn" @click="openEngineerPopup">Complete Engineer Info</button>
+        </div>
+
+        <div class="summary-panel" v-if="activeProductId">
+          <h2 class="panel-title">Inspection Summary</h2>
+
+          <div class="summary-controls">
+            <label>Meeting Duration (min): </label>
+            <input type="number" v-model="meetingDuration" class="small-input" placeholder="0" />
+          </div>
+
+          <table class="styled-table summary-table">
+            <thead>
+              <tr>
+                <th>Attribute</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total Defects (A)</td>
+                <td>{{ inspectionSummary.A }}</td>
+              </tr>
+              <tr>
+                <td>Total Defects (B)</td>
+                <td>{{ inspectionSummary.B }}</td>
+              </tr>
+              <tr>
+                <td>C (Common)</td>
+                <td>{{ inspectionSummary.C }}</td>
+              </tr>
+              <tr class="highlight-row">
+                <td>**Unique Defects Found**</td>
+                <td>**{{ inspectionSummary.numberFound }}**</td>
+              </tr>
+              <tr>
+                <td>Estimated Total Defects (AB/C)</td>
+                <td>{{ inspectionSummary.estimatedTotal }}</td>
+              </tr>
+              <tr>
+                <td>**Number Left**</td>
+                <td>**{{ inspectionSummary.numberLeft }}**</td>
+              </tr>
+              <tr>
+                <td>Product Size (LOC/Pages)</td>
+                <td>{{ inspectionSummary.totalSize }}</td>
+              </tr>
+              <tr>
+                <td>Total Inspection Hours</td>
+                <td>{{ inspectionSummary.totalHours }}</td>
+              </tr>
+              <tr class="highlight-row">
+                <td>**Overall Rate** (Size ÷ Hours)</td>
+                <td>**{{ inspectionSummary.rate }}**</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <div v-if="showAddPopup" class="popup-overlay">
@@ -717,4 +878,39 @@ const updateItemStatus = async (item) => {
 .popup-buttons { display: flex; justify-content: space-between; margin-top: 15px; }
 .add-btn { background-color: #27ae60; color: white; padding: 8px 16px; border: none; cursor: pointer; border-radius: 4px; }
 .cancel-btn { background-color: #7f8c8d; color: white; padding: 8px 16px; border: none; cursor: pointer; border-radius: 4px; }
+
+
+.summary-panel {
+  background-color: white;
+  border: 1px solid #ddd;
+  width: 95%;
+  margin-top: 25px;
+  margin-bottom: 50px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.summary-controls {
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-bottom: 1px solid #eee;
+}
+
+.small-input {
+  padding: 5px;
+  width: 80px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.summary-table td:nth-child(2) {
+  font-weight: bold;
+  text-align: center;
+  color: #2c3e50;
+}
+
+.highlight-row {
+  background-color: #e3f2fd; /* Light blue highlight for key metrics */
+}
+
+
 </style>

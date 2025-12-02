@@ -543,6 +543,19 @@ export const addDefectTransaction = async (defectData, engineerData) => {
   }
 }
 
+export const updateDefectChecks = async (defectDocId, checkA, checkB) => {
+  return await databases.updateDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.defectsCollectionId,
+    defectDocId,
+    {
+      check_a: checkA,
+      check_b: checkB
+    }
+  )
+}
+
+
 // 5. Update Engineer Info
 export const updateEngineerInfo = async (projectId, productId, userId, size, time) => {
   const existing = await databases.listDocuments(
