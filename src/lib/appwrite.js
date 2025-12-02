@@ -4,6 +4,7 @@ export const appwriteConfig = {
   endpoints: 'https://fra.cloud.appwrite.io/v1',
   projectId: '69077b0f000a7c658f1f',
   databaseId: '69077bac0022f04161c1',
+  storageBucketId: '6926e205001c81bfb74a',
   userCollectionId: 'users',
   userProjectsCollectionId: 'user_projects',
   projectCollectionId: 'projects',
@@ -12,7 +13,6 @@ export const appwriteConfig = {
   productsCollectionId: 'products',
   checklistsCollectionId: 'checklist',
   checklistItemsCollectionId: 'checklist_items',
-  storageBucketId: '6926e205001c81bfb74a',
   projectInvitationCollectionId: 'project_invitation',
 }
 
@@ -22,7 +22,6 @@ client.setEndpoint(appwriteConfig.endpoints).setProject(appwriteConfig.projectId
 const account = new Account(client)
 const databases = new Databases(client)
 const storage = new Storage(client)
-
 
 export const signIn = async (email, password) => {
   try {
@@ -330,19 +329,14 @@ export function formatAppwriteDate(isoString) {
   }
 }
 
-
 // --- STORAGE FUNCTIONS ---
 
 export const uploadFileToStorage = async (file) => {
   try {
-    const result = await storage.createFile(
-      appwriteConfig.storageBucketId,
-      ID.unique(),
-      file
-    )
+    const result = await storage.createFile(appwriteConfig.storageBucketId, ID.unique(), file)
     return result // Returns file object (contains $id)
   } catch (error) {
-    console.error("Storage Upload Error:", error)
+    console.error('Storage Upload Error:', error)
     throw error
   }
 }
@@ -393,54 +387,46 @@ export const getProjectAllUsers = async (project_id) => {
   }
 }
 
-
 // 1. Fetch all data for the project
 export const getProjectData = async (projectId) => {
   try {
     const [engineers, defects, products] = await Promise.all([
-      databases.listDocuments(
-        appwriteConfig.databaseId,
-        appwriteConfig.engineersDataCollectionId,
-        [Query.equal('projectId', projectId)]
-      ),
-      databases.listDocuments(
-        appwriteConfig.databaseId,
-        appwriteConfig.defectsCollectionId,
-        [Query.equal('projectId', projectId)]
-      ),
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.engineersDataCollectionId, [
+        Query.equal('projectId', projectId),
+      ]),
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.defectsCollectionId, [
+        Query.equal('projectId', projectId),
+      ]),
       // Optional: Fetch products from DB if you store them there
-      databases.listDocuments(
-         appwriteConfig.databaseId,
-         appwriteConfig.productsCollectionId,
-         [Query.equal('projectId', projectId)]
-      )
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.productsCollectionId, [
+        Query.equal('projectId', projectId),
+      ]),
     ])
 
     return {
       engineers: engineers.documents,
       defects: defects.documents,
-      products: products.documents
+      products: products.documents,
     }
   } catch (error) {
-    console.error("Error fetching data:", error)
+    console.error('Error fetching data:', error)
     return { engineers: [], defects: [], products: [] }
   }
 }
 
-
 // 1. Fetch Initial Project Data (Products List)
 export const getProjectProducts = async (projectId) => {
-    try {
-        const products = await databases.listDocuments(
-            appwriteConfig.databaseId,
-            appwriteConfig.productsCollectionId,
-            [Query.equal('projectId', projectId)]
-        )
-        return products.documents
-    } catch (error) {
-        console.error("Error fetching products:", error)
-        return []
-    }
+  try {
+    const products = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.productsCollectionId,
+      [Query.equal('projectId', projectId)],
+    )
+    return products.documents
+  } catch (error) {
+    console.error('Error fetching products:', error)
+    return []
+  }
 }
 
 // 2. Create Product (After file upload)
@@ -455,16 +441,15 @@ export const createProductDocument = async (projectId, userId, fileName, fileId,
         userId,
         name: fileName,
         fileId,
-        mimeType
-      }
+        mimeType,
+      },
     )
     return newProduct
   } catch (error) {
-    console.error("Error creating product doc:", error)
+    console.error('Error creating product doc:', error)
     throw error
   }
 }
-
 
 export const updateUserRoles = async (project_id, updatedUsers) => {
   if (!project_id || !updatedUsers || updatedUsers.length === 0) {
@@ -522,44 +507,35 @@ export const updateUserRoles = async (project_id, updatedUsers) => {
 export const getProductData = async (projectId, productId) => {
   try {
     const [engineers, defects] = await Promise.all([
-      databases.listDocuments(
-        appwriteConfig.databaseId,
-        appwriteConfig.engineersDataCollectionId,
-        [
-            Query.equal('projectId', projectId),
-            Query.equal('productId', productId)
-        ]
-      ),
-      databases.listDocuments(
-        appwriteConfig.databaseId,
-        appwriteConfig.defectsCollectionId,
-        [
-            Query.equal('projectId', projectId),
-            Query.equal('productId', productId)
-        ]
-      )
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.engineersDataCollectionId, [
+        Query.equal('projectId', projectId),
+        Query.equal('productId', productId),
+      ]),
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.defectsCollectionId, [
+        Query.equal('projectId', projectId),
+        Query.equal('productId', productId),
+      ]),
     ])
 
     return {
       engineers: engineers.documents,
-      defects: defects.documents
+      defects: defects.documents,
     }
   } catch (error) {
-    console.error("Error fetching product data:", error)
+    console.error('Error fetching product data:', error)
     return { engineers: [], defects: [] }
   }
 }
 
 // 4. Add Defect Transaction
 export const addDefectTransaction = async (defectData, engineerData) => {
-  // eslint-disable-next-line no-useless-catch
   try {
     // A. Create Defect
     const newDefect = await databases.createDocument(
       appwriteConfig.databaseId,
       appwriteConfig.defectsCollectionId,
       ID.unique(),
-      defectData
+      defectData,
     )
 
     // B. Check/Update Engineer Data
@@ -569,8 +545,8 @@ export const addDefectTransaction = async (defectData, engineerData) => {
       [
         Query.equal('projectId', engineerData.projectId),
         Query.equal('productId', engineerData.productId),
-        Query.equal('userId', engineerData.userId)
-      ]
+        Query.equal('userId', engineerData.userId),
+      ],
     )
 
     if (existing.total > 0) {
@@ -582,8 +558,8 @@ export const addDefectTransaction = async (defectData, engineerData) => {
         doc.$id,
         {
           major: doc.major + (defectData.severity === 'Major' ? 1 : 0),
-          minor: doc.minor + (defectData.severity === 'Minor' ? 1 : 0)
-        }
+          minor: doc.minor + (defectData.severity === 'Minor' ? 1 : 0),
+        },
       )
     } else {
       // Create new
@@ -600,13 +576,13 @@ export const addDefectTransaction = async (defectData, engineerData) => {
           size: 0,
           time: 0,
           rate: 0,
-          est_yield: 0
-        }
+          est_yield: 0,
+        },
       )
     }
     return newDefect
   } catch (error) {
-    console.error("Error adding defect transaction:", error)
+    console.error('Error adding defect transaction:', error)
     throw error
   }
 }
@@ -704,11 +680,10 @@ export const updateDefectChecks = async (defectDocId, checkA, checkB) => {
     defectDocId,
     {
       check_a: checkA,
-      check_b: checkB
-    }
+      check_b: checkB,
+    },
   )
 }
-
 
 // 5. Update Engineer Info
 export const updateEngineerInfo = async (projectId, productId, userId, size, time) => {
@@ -718,11 +693,11 @@ export const updateEngineerInfo = async (projectId, productId, userId, size, tim
     [
       Query.equal('projectId', projectId),
       Query.equal('productId', productId),
-      Query.equal('userId', userId)
-    ]
+      Query.equal('userId', userId),
+    ],
   )
 
-  if (existing.total === 0) throw new Error("No engineer record found.")
+  if (existing.total === 0) throw new Error('No engineer record found.')
 
   const doc = existing.documents[0]
 
@@ -739,23 +714,24 @@ export const updateEngineerInfo = async (projectId, productId, userId, size, tim
       size: Number(size),
       time: Number(time),
       rate: Number(rate),
-      est_yield: Number(est_yield)
-    }
+      est_yield: Number(est_yield),
+    },
   )
 }
 
 // 6. Auth Helpers
 export const getUsernameById = async (userId) => {
   try {
-     const userDocs = await databases.listDocuments(
-       appwriteConfig.databaseId,
-       appwriteConfig.userCollectionId,
-       [Query.equal('account_id', userId)]
-     )
-     return userDocs.total > 0 ? userDocs.documents[0].username : 'Unknown'
-  } catch (e) { return 'Unknown' }
+    const userDocs = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      [Query.equal('account_id', userId)],
+    )
+    return userDocs.total > 0 ? userDocs.documents[0].username : 'Unknown'
+  } catch (e) {
+    return 'Unknown'
+  }
 }
-
 
 // --- CHECKLIST FUNCTIONS ---
 
@@ -766,38 +742,37 @@ export const getProductChecklists = async (projectId, productId) => {
     const listsResponse = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.checklistsCollectionId,
-      [
-        Query.equal('projectId', projectId),
-        Query.equal('productId', productId)
-      ]
+      [Query.equal('projectId', projectId), Query.equal('productId', productId)],
     )
 
     const lists = listsResponse.documents
 
     // B. For each list, fetch its items
     // (Optimization: In a huge app, you might fetch all items at once, but this is safer for now)
-    const result = await Promise.all(lists.map(async (list) => {
-      const itemsResponse = await databases.listDocuments(
-        appwriteConfig.databaseId,
-        appwriteConfig.checklistItemsCollectionId,
-        [Query.equal('checklistId', list.$id)]
-      )
+    const result = await Promise.all(
+      lists.map(async (list) => {
+        const itemsResponse = await databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.checklistItemsCollectionId,
+          [Query.equal('checklistId', list.$id)],
+        )
 
-      return {
-        id: list.$id, // Map $id to id for your UI
-        name: list.name,
-        isShared: list.isShared,
-        items: itemsResponse.documents.map(item => ({
-          id: item.$id,
-          text: item.text,
-          done: item.done
-        }))
-      }
-    }))
+        return {
+          id: list.$id, // Map $id to id for your UI
+          name: list.name,
+          isShared: list.isShared,
+          items: itemsResponse.documents.map((item) => ({
+            id: item.$id,
+            text: item.text,
+            done: item.done,
+          })),
+        }
+      }),
+    )
 
     return result
   } catch (error) {
-    console.error("Error fetching checklists:", error)
+    console.error('Error fetching checklists:', error)
     return []
   }
 }
@@ -941,8 +916,8 @@ export const createChecklist = async (projectId, productId, userId, name) => {
       isShared: false, // Default
       projectId: projectId,
       productId: productId,
-      userId: userId
-    }
+      userId: userId,
+    },
   )
   // Return formatted object
   return { id: doc.$id, name: doc.name, isShared: doc.isShared, items: [] }
@@ -955,7 +930,7 @@ export const deleteChecklist = async (checklistId) => {
   await databases.deleteDocument(
     appwriteConfig.databaseId,
     appwriteConfig.checklistsCollectionId,
-    checklistId
+    checklistId,
   )
 }
 
@@ -965,7 +940,7 @@ export const updateChecklistShare = async (checklistId, isShared) => {
     appwriteConfig.databaseId,
     appwriteConfig.checklistsCollectionId,
     checklistId,
-    { isShared: isShared }
+    { isShared: isShared },
   )
 }
 
@@ -978,8 +953,8 @@ export const addChecklistItemDB = async (checklistId, text) => {
     {
       checklistId: checklistId,
       text: text,
-      done: false
-    }
+      done: false,
+    },
   )
   return { id: doc.$id, text: doc.text, done: doc.done }
 }
@@ -990,7 +965,7 @@ export const updateChecklistItemStatus = async (itemId, isDone) => {
     appwriteConfig.databaseId,
     appwriteConfig.checklistItemsCollectionId,
     itemId,
-    { done: isDone }
+    { done: isDone },
   )
 }
 
@@ -999,7 +974,7 @@ export const deleteChecklistItemDB = async (itemId) => {
   await databases.deleteDocument(
     appwriteConfig.databaseId,
     appwriteConfig.checklistItemsCollectionId,
-    itemId
+    itemId,
   )
 }
 
