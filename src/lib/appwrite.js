@@ -1,5 +1,4 @@
 import { ID, Client, Account, Databases, Query, Storage } from 'appwrite'
-import { data } from 'autoprefixer'
 
 export const appwriteConfig = {
   endpoints: 'https://fra.cloud.appwrite.io/v1',
@@ -13,7 +12,7 @@ export const appwriteConfig = {
   productsCollectionId: 'products',
   checklistsCollectionId: 'checklist',
   checklistItemsCollectionId: 'checklist_items',
-  storageBucketId: '6926e205001c81bfb74a'
+  storageBucketId: '6926e205001c81bfb74a',
   projectInvitationCollectionId: 'project_invitation',
 }
 
@@ -452,17 +451,21 @@ export const createProductDocument = async (projectId, userId, fileName, fileId,
       appwriteConfig.productsCollectionId,
       ID.unique(),
       {
-        projectId: projectId,
-        userId: userId,
-        // Assuming you added these columns to 'products' collection based on requirement
+        projectId,
+        userId,
         name: fileName,
-        fileId: fileId,
-        mimeType: mimeType
+        fileId,
+        mimeType
       }
     )
     return newProduct
   } catch (error) {
     console.error("Error creating product doc:", error)
+    throw error
+  }
+}
+
+
 export const updateUserRoles = async (project_id, updatedUsers) => {
   if (!project_id || !updatedUsers || updatedUsers.length === 0) {
     console.warn('Project ID or user list is missing.')
@@ -603,6 +606,11 @@ export const addDefectTransaction = async (defectData, engineerData) => {
     }
     return newDefect
   } catch (error) {
+    console.error("Error adding defect transaction:", error)
+    throw error
+  }
+}
+
 export const getUserInfoByEmail = async (user_email) => {
   try {
     const user = await databases.listDocuments(
@@ -790,6 +798,10 @@ export const getProductChecklists = async (projectId, productId) => {
     return result
   } catch (error) {
     console.error("Error fetching checklists:", error)
+    return []
+  }
+}
+
 export const getProjectById = async (project_id) => {
   try {
     const project = await databases.listDocuments(
