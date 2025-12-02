@@ -15,6 +15,8 @@
       :avatar="user_avatar"
       :username="username"
       :projects="user_projects"
+      :user_id="user_id"
+      :loadProjects="loadProjects"
       v-else
     />
 

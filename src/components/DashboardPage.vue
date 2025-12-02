@@ -9,7 +9,6 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const create_project = ref(true)
-const currentLayout = ref('project-none')
 const project_input = ref('')
 const userInfoStore = userInformationStore()
 
@@ -31,8 +30,10 @@ onMounted(() => {})
 
 onUnmounted(() => {})
 
+const isProjectModalOpen = ref(false)
+
 const showProjectWindow = (project_type) => {
-  currentLayout.value = 'project-flex'
+  isProjectModalOpen.value = true
   if (project_type == 2) {
     create_project.value = false
   } else {
@@ -41,8 +42,7 @@ const showProjectWindow = (project_type) => {
 }
 
 const closeProjectWindonw = () => {
-  currentLayout.value = 'project-none'
-  project_input.value = ''
+  isProjectModalOpen.value = false
 }
 
 const create_project_api = async () => {
@@ -56,7 +56,7 @@ const create_project_api = async () => {
   } catch (error) {
     alert(error)
   }
-  currentLayout.value = 'project-none'
+  isProjectModalOpen.value = false
   await props.loadProjects()
 }
 
@@ -75,14 +75,14 @@ const join_project_api = async () => {
   } catch (error) {
     alert(error)
   }
-  currentLayout.value = 'project-none'
+  isProjectModalOpen.value = false
   await props.loadProjects()
 }
 </script>
 
 <template>
   <div class="components">
-    <div :class="currentLayout" class="project-modal">
+    <div v-if="isProjectModalOpen" class="project-modal" @click.self="isProjectModalOpen = false">
       <div v-if="create_project" class="project-window">
         <div class="close-emoji" @click="closeProjectWindonw">❌</div>
         <div class="project-name-text">Project Name:</div>

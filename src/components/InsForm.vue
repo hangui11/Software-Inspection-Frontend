@@ -1,12 +1,10 @@
 <script setup>
 import { useRoute } from 'vue-router'
-import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
+import { ref, onMounted, computed, onBeforeUnmount, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { userInformationStore } from '@/store/searchStore'
 import share_icon from '@/assets/icons/share.png'
 import ShareWindow from './ShareWindow.vue'
-
-// Import API functions
 import {
   getProjectProducts,
   getProductData,
@@ -26,14 +24,28 @@ import {
   deleteChecklistItemDB
 } from '@/lib/appwrite.js'
 
+const props = defineProps({
+  loadProjects: {
+    type: Function, // If it's a function
+    required: false,
+    // Add default value if not required
+  },
+})  
+  
 // --- SETUP & ROUTE ---
 const route = useRoute()
 const userInfoStore = userInformationStore()
 
-// 🔴 FIX: Use 'userid' matching your store definition
-const { username: currentUsername, userid: currentUserId } = storeToRefs(userInfoStore)
 
 const projectId = ref(null)
+const {
+  recent_projects: recent_projects_stored,
+  projects: projects_stored,
+  avatar: avatar_stored,
+  username: username_stored,
+  userid: currentUserId,
+} = storeToRefs(userInfoStore)
+
 const activeProductId = ref(null)
 
 // --- DATA STATE ---
@@ -52,8 +64,16 @@ const engineerForm = ref({ size: 0, time: 0 })
 const fileInput = ref(null)
 
 // --- SHARE LOGIC ---
+
+const current_project = ref('')
+const copyStatus = ref('initial')
+
 const isModalOpen = ref(false)
-const showShareWindow = () => { isModalOpen.value = true }
+
+const showShareWindow = () => {
+  isModalOpen.value = true
+  console.log('Modal state updated to:', isModalOpen.value)
+}
 
 // --- COMPUTED ---
 const engineerColumns = computed(() => {
@@ -75,14 +95,53 @@ const defectTotals = computed(() => {
 })
 
 // --- LIFECYCLE ---
-onMounted(async () => {
+onMounted(async() => {
   const idFromRoute = route.params.project_id
+  console.log(idFromRoute)
+
   if (idFromRoute) {
     projectId.value = idFromRoute
-    // Load existing products for this project
+
+    // 🔑 FIX: Use .find() to return the single project object
+    current_project.value = projects_stored.value.find((p) => p.$id === projectId.value)
     products.value = await getProjectProducts(projectId.value)
+
+    // Check if the project was actually found for debugging
+    if (!current_project.value) {
+      console.error('Project not found with ID:', projectId.value)
+    }
   }
 })
+  
+onUnmounted(() => {})
+
+// 🔑 Computed property for the text on the button/tooltip
+const copyMessage = computed(() => {
+  if (copyStatus.value === 'copied') return 'Copied!'
+  if (copyStatus.value === 'failed') return 'Failed to copy.'
+  return 'Click to copy Project ID'
+})
+
+// 🔑 NEW FUNCTION: Copies text to the clipboard
+const copyIdToClipboard = async () => {
+  if (!projectId.value) return
+
+  try {
+    await navigator.clipboard.writeText(projectId.value)
+    copyStatus.value = 'copied'
+
+    // Reset status after a delay
+    setTimeout(() => {
+      copyStatus.value = 'initial'
+    }, 2500) // Slightly longer visibility
+  } catch (err) {
+    console.error('Failed to copy text: ', err)
+    copyStatus.value = 'failed'
+    setTimeout(() => {
+      copyStatus.value = 'initial'
+    }, 2500)
+  }
+}
 
 // --- METHODS ---
 
@@ -93,7 +152,7 @@ const selectProduct = async (prod) => {
 
   // A. Load File View
   if (prod.mimeType === 'application/pdf') {
-     fileContentUrl.value = getFileView(prod.fileId)
+     fileContentUrl.value = getFileView(preId)
   } else {
      const url = getFileDownload(prod.fileId)
      if(url) {
@@ -472,6 +531,12 @@ const inspectionSummary = computed(() => {
 </script>
 
 <template>
+ <div v-if="isModalOpen" class="share-modal" @click.self="isModalOpen = false">
+    <div>
+      <ShareWindow :projectId="projectId" :userId="currentUserId" @close="isModalOpen = false" />
+    </div>
+  </div>
+
   <div class="app-container">
 
     <aside class="sidebar">
