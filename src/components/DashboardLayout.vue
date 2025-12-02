@@ -15,6 +15,8 @@
       :avatar="user_avatar"
       :username="username"
       :projects="user_projects"
+      :user_id="user_id"
+      :loadProjects="loadProjects"
       v-else
     />
 
@@ -82,7 +84,7 @@ onMounted(async () => {
     recent_projects.value = recent_projects_stored.value
     user_avatar.value = avatar_stored.value
     username.value = username_stored.value
-    user_id.value = userid_stored
+    user_id.value = userid_stored.value
     isLoading.value = false
   }
 })

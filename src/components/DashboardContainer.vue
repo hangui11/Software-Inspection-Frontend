@@ -1,16 +1,25 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, onBeforeUnmount, onMounted, nextTick } from 'vue'
-import { useSearchStore } from '@/store/searchStore'
+import { useSearchStore, userInformationStore } from '@/store/searchStore'
 import search from '@/assets/icons/search.png'
 import signout from '@/assets/icons/signout.svg'
 import lucky_coin from '@/assets/icons/lucky-coin.svg'
 import calendar from '@/assets/icons/calendar.svg'
-import { logOut } from '@/lib/appwrite'
+import message_icon from '@/assets/icons/message.svg'
+import {
+  logOut,
+  showUserRequest,
+  showUserInvitation,
+  readAllMessages,
+  joinProject,
+  updateInvitationStatus,
+} from '@/lib/appwrite'
 
 const router = useRouter()
 const searchStore = useSearchStore()
-
+const userInfoStore = userInformationStore()
+const hasNewMessage = ref(false)
 const props = defineProps({
   avatar: {
     type: String,
@@ -24,10 +33,19 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  user_id: {
+    type: String,
+    required: true,
+  },
+  loadProjects: {
+    type: Function,
+    required: true,
+  },
 })
 
 const input = ref('')
 const inputRef = ref(null)
+const displayMessageBox = ref(false)
 
 const dashboard = () => {
   window.location.href = '/dashboard'
@@ -37,6 +55,8 @@ const log_out = async () => {
   try {
     const session = await logOut()
     console.log(session)
+    searchStore.clearSearch()
+    userInfoStore.clearUserInfo()
     setTimeout(() => {
       router.replace('/')
     }, 500)
@@ -48,6 +68,8 @@ const log_out = async () => {
 const filteredProjects = ref([])
 const showDropdown = ref(false)
 const searchContainer = ref(null)
+const invitationMessages = ref([]) // invite the user in projects
+const requestMessages = ref([]) // show invited user status to the inviter
 
 const handleInput = () => {
   // 1. Trigger the filtering logic
@@ -106,13 +128,48 @@ const handleClickOutside = (event) => {
   }
 }
 
-onMounted(() => {
+const showMessageBox = async () => {
+  hasNewMessage.value = false
+  displayMessageBox.value = !displayMessageBox.value
+  await readAllMessages(invitationMessages.value, requestMessages.value)
+}
+
+onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
+  try {
+    invitationMessages.value = await showUserInvitation(props.user_id)
+    requestMessages.value = await showUserRequest(props.user_id)
+    console.log(invitationMessages)
+    console.log(requestMessages)
+
+    const unreadInvitationExists = invitationMessages.value.some((p) => !p.isRead)
+    const unreadRequestExists = requestMessages.value.some((p) => !p.isRead)
+
+    hasNewMessage.value = unreadInvitationExists || unreadRequestExists
+  } catch (error) {
+    console.log(error)
+  }
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
 })
+
+const acceptInvitation = async (invitation_id, project_id, role, invited_user_id) => {
+  invitationMessages.value = invitationMessages.value.filter(
+    (message) => message.invitation_id !== invitation_id,
+  )
+  await joinProject(project_id, invited_user_id, role)
+  await updateInvitationStatus(invitation_id, 'accepted')
+  await props.loadProjects()
+}
+
+const rejectInvitation = async (invitation_id) => {
+  invitationMessages.value = invitationMessages.value.filter(
+    (message) => message.invitation_id !== invitation_id,
+  )
+  await updateInvitationStatus(invitation_id, 'rejected')
+}
 </script>
 
 <template>
@@ -155,8 +212,74 @@ onBeforeUnmount(() => {
         <p class="username">{{ props.username }}</p>
       </div>
 
-      <img class="signout-icon" :src="calendar" @click="showCalendar" />
-      <img class="signout-icon" :src="signout" @click="log_out" />
+      <div class="icon-bar">
+        <div class="message-icon-wrapper" @click="showMessageBox">
+          <img class="icons" :src="message_icon" alt="Messages" />
+          <span v-if="hasNewMessage" class="notification-badge"></span>
+        </div>
+        <div class="messagebox" v-if="displayMessageBox">
+          <div class="messages-list-container">
+            <div
+              v-for="message in invitationMessages"
+              :key="message.invitation_id"
+              class="message-item invitation-item"
+            >
+              <p>
+                User <strong>{{ message.inviter_user.name }}</strong> with email
+                <span class="email">{{ message.inviter_user.email }}</span> invites you to join the
+                project <strong>{{ message.project_name }}</strong
+                >.
+              </p>
+
+              <div class="invitation-actions">
+                <button
+                  class="action-btn accept-btn"
+                  @click="
+                    acceptInvitation(
+                      message.invitation_id,
+                      message.project_id,
+                      message.role,
+                      props.user_id,
+                    )
+                  "
+                >
+                  ✔️ Accept
+                </button>
+                <button
+                  class="action-btn reject-btn"
+                  @click="rejectInvitation(message.invitation_id)"
+                >
+                  ❌ Reject
+                </button>
+              </div>
+            </div>
+
+            <div
+              v-for="message in requestMessages"
+              :key="message.request_id"
+              class="message-item request-item"
+            >
+              <p>
+                The invitation for user <strong>{{ message.invited_user.name }}</strong> (<span
+                  class="email"
+                  >{{ message.invited_user.email }}</span
+                >) to join project <strong>{{ message.project_name }}</strong> is currently
+                <strong
+                  :class="{
+                    'status-accepted': message.status === 'accepted',
+                    'status-rejected': message.status === 'rejected',
+                    'status-pending': message.status === 'pending',
+                  }"
+                >
+                  {{ message.status }}
+                </strong>
+              </p>
+            </div>
+          </div>
+        </div>
+        <img class="icons" :src="calendar" @click="showCalendar" />
+        <img class="signout-icon" :src="signout" @click="log_out" />
+      </div>
     </div>
   </div>
 </template>
@@ -308,10 +431,164 @@ input#search {
   font-weight: bold;
 }
 
+.icon-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.message-icon-wrapper {
+  position: relative;
+  height: 2.7rem;
+  width: 2.7rem;
+}
+
+.icons {
+  width: 2.7rem;
+  cursor: pointer;
+  /* If using 'gap' on the parent, REMOVE this margin: */
+  margin-left: 1.5rem;
+}
+
+.message-icon-wrapper img {
+  display: block;
+}
+
 .signout-icon {
   width: 2.7rem;
   cursor: pointer;
-  margin-left: 1.5rem;
+  margin-left: 3.5rem;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 0px;
+  right: -25px;
+  width: 12px;
+  height: 12px;
+  background-color: #f70000;
+  border-radius: 50%;
+  border: 1.5px solid white;
+}
+
+.messagebox {
+  position: fixed;
+  width: 400px;
+  height: 200px;
+  border: solid 2px #ccc;
+  top: 70px;
+  right: 235px;
+  z-index: 1000;
+  background-color: white;
+  border-radius: 10px;
+  overflow-y: auto;
+}
+
+/* Container for all messages (if you wrap the v-for loops) */
+.messages-list-container {
+  padding: 10px;
+  /* Assumes .messagebox already has overflow-y: auto for scrolling */
+}
+
+/* Style for individual invitation and request blocks */
+.message-item {
+  background-color: #f7f7f7; /* Light background for separation */
+  border: 1px solid #eee;
+  padding: 10px 12px;
+  margin-bottom: 10px; /* Space between messages */
+  border-radius: 6px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  word-wrap: break-word; /* Ensure long emails wrap */
+}
+
+.message-item p {
+  margin: 0; /* Remove default paragraph margin */
+  color: #333; /* Dark text color */
+  font-size: small;
+}
+
+/* Highlight the key user and project names */
+.message-item p strong {
+  font-weight: 600;
+  color: #007bff; /* Use primary color for main subjects */
+}
+
+/* Style for emails (often slightly muted) */
+.message-item p span.email {
+  font-size: 0.9em;
+  color: #6c757d;
+}
+
+/* --- Green for Success/Acceptance --- */
+.message-item strong.status-accepted {
+  color: #155724;
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+}
+
+/* --- Red for Rejection/Failure --- */
+.message-item strong.status-rejected {
+  color: #721c24;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+}
+
+/* --- Yellow/Orange for Pending/Warning --- */
+.message-item strong.status-pending {
+  color: #856404; /* Dark yellow/brown text */
+  background-color: #fff3cd; /* Light yellow background */
+  border: 1px solid #ffeeba;
+}
+
+/* Style for pending invitations (Action Required by current user) */
+.invitation-item {
+  border-left: 5px solid #28a745; /* Green bar for a positive/actionable item */
+  background-color: #e6ffed; /* Very light green background */
+}
+
+/* Style for status updates on requests you SENT (Status Update/Info) */
+.request-item {
+  border-left: 5px solid #ffc107; /* Yellow/Orange bar for a status update */
+  background-color: #fff9e6; /* Very light yellow background */
+}
+
+.invitation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s;
+  font-size: 0.85rem;
+}
+
+.accept-btn {
+  color: white;
+  background-color: #28a745;
+  border: 1px solid #28a745;
+}
+
+.accept-btn:hover {
+  background-color: #218838;
+}
+
+.reject-btn {
+  color: #dc3545;
+  background-color: transparent;
+  border: 1px solid #dc3545;
+}
+
+.reject-btn:hover {
+  background-color: #f8d7da;
 }
 
 @media screen and (max-width: 768px) {

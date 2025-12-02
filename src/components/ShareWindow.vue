@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { getUserEmail } from '@/lib/appwrite'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { getUserEmail, getUserInfoById } from '@/lib/appwrite'
 import user_icon from '@/assets/icons/user.svg'
-import { getProjectAllUsers } from '@/lib/appwrite'
+import { getProjectAllUsers, updateUserRoles, sendUserInvitations } from '@/lib/appwrite'
+const emit = defineEmits(['close'])
 // Props (assumed):
 const props = defineProps({
   projectId: {
@@ -14,6 +15,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+const current_user_role = ref('')
 
 // --- State for Invitation Form ---
 const newInvite = ref({
@@ -40,8 +43,14 @@ const user_email = ref('')
 onMounted(async () => {
   user_email.value = await getUserEmail(props.userId)
   projectUsers.value = await getProjectAllUsers(props.projectId)
+  current_user_role.value = projectUsers.value.find((p) => p.id === props.userId).role
+  console.log(current_user_role.value)
 })
 
+onUnmounted(async () => {
+  await updateUserRoles(props.projectId, projectUsers.value)
+  // console.log(projectUsers.value)
+})
 // --- Computed & Validation ---
 
 // Checks if the current input is valid to be added to the invite list
@@ -55,6 +64,7 @@ const isNewInviteValid = computed(() => {
   // 2. Check if the email is already staged
   if (inviteList.value.some((user) => user.email === email)) return false
 
+  if (projectUsers.value.find((user) => user.email === newInvite.value.email)) return false
   return true
 })
 
@@ -63,10 +73,6 @@ const isNewInviteValid = computed(() => {
 const addInvite = () => {
   if (!isNewInviteValid.value) return
 
-  if (newInvite.value.email == user_email.value) {
-    alert('Do not enter the current user email address')
-    return
-  }
   // Add the new user to the list
   inviteList.value.push({
     ...newInvite.value,
@@ -88,12 +94,11 @@ const sendInvitations = async () => {
     return
   }
 
-  // 🔑 Placeholder for Appwrite or API call to send invitations
-  console.log('Sending invitations for Project ID:', props.projectId)
-  console.log('Inviting users:', inviteList.value)
-
-  // Simulating API call success
-  alert(`Sent ${inviteList.value.length} invitations successfully!`)
+  try {
+    await sendUserInvitations(props.projectId, inviteList.value, props.userId)
+  } catch (error) {
+    console.log('Send Invitation Error:', error)
+  }
 
   // Clear the list after sending
   inviteList.value = []
@@ -101,13 +106,21 @@ const sendInvitations = async () => {
   // You would typically emit an event here to close the modal:
   // emit('close')
 }
+
+const closeWindow = () => {
+  console.log('Closed')
+  emit('close')
+}
 </script>
 
 <template>
   <div class="share-container">
-    <h3 class="modal-title">Share Project</h3>
+    <div class="header-container">
+      <h3 class="modal-title">Share Project</h3>
+      <div class="close-emoji" @click="closeWindow">❌</div>
+    </div>
 
-    <div class="invite-form-box">
+    <div class="invite-form-box" v-if="current_user_role == 'owner'">
       <p class="form-label">Email Address:</p>
       <div class="input-group">
         <input
@@ -147,9 +160,12 @@ const sendInvitations = async () => {
       </ul>
     </div>
 
-    <p v-else class="empty-list-message">No users staged for invitation.</p>
+    <p v-else-if="current_user_role == 'owner' && !inviteList.length" class="empty-list-message">
+      No users staged for invitation.
+    </p>
+    <p v-else>Request sharing permission.</p>
 
-    <div class="modal-invite">
+    <div class="modal-invite" v-if="current_user_role == 'owner'">
       <button
         @click="sendInvitations"
         :disabled="inviteList.length === 0"
@@ -160,33 +176,32 @@ const sendInvitations = async () => {
       </button>
     </div>
 
-    <ul class="modal-users-list">
-      <li v-for="user in projectUsers" :key="user.id" class="user-item">
-        <!-- 1. User Icon (Left Side) -->
-        <img :src="user_icon" alt="User Avatar" class="user-avatar" />
+    <div class="users-list">
+      <ul class="modal-users-list">
+        <li v-for="user in projectUsers" :key="user.id" class="user-item">
+          <img :src="user_icon" alt="User Avatar" class="user-avatar" />
+          <div class="user-email">{{ user.email }}</div>
+          <div class="user-role-control">
+            <select
+              v-if="user.role != 'owner' && current_user_role.value == 'owner'"
+              v-model="user.role"
+              @change="$emit('update-user-role', user.id, user.role)"
+              class="role-select"
+            >
+              <option value="reviewer">Reviewer</option>
+              <option value="moderator">Moderator</option>
+            </select>
+            <span v-else class="owner-tag">{{
+              user.role.charAt(0).toUpperCase() + user.role.slice(1)
+            }}</span>
+          </div>
+        </li>
+      </ul>
+    </div>
 
-        <!-- 2. User Email (Main Content Area) -->
-        <div class="user-email">{{ user.email }}</div>
-
-        <!-- 3. Role Selector (Editable Area) -->
-        <div class="user-role-control">
-          <!-- 🔑 Use a <select> element bound to the user's role -->
-          <!-- Assume 'availableRoles' is defined in your script -->
-          <select
-            v-if="user.role != 'owner'"
-            v-model="user.role"
-            @change="$emit('update-user-role', user.id, user.role)"
-            class="role-select"
-          >
-            <option value="reviewer">Reviewer</option>
-            <option value="moderator">Moderator</option>
-          </select>
-
-          <!-- Display "Owner" text if the user is the project owner -->
-          <span v-else class="owner-tag">Owner</span>
-        </div>
-      </li>
-    </ul>
+    <div class="close-container">
+      <button class="close-btn" @click="closeWindow">Close</button>
+    </div>
   </div>
 </template>
 
@@ -201,13 +216,19 @@ const sendInvitations = async () => {
   font-family: Arial, sans-serif;
 }
 
-.modal-title {
+.header-container {
   border-bottom: 1px solid #eee;
-  padding-bottom: 15px;
   margin-top: 0;
   color: #333;
+  display: flex;
+  justify-content: space-between;
 }
 
+.close-emoji {
+  margin-block-start: 1em;
+  margin-block-end: 1em;
+  cursor: pointer;
+}
 /* --- Form Box --- */
 .invite-form-box {
   margin-bottom: 20px;
@@ -228,7 +249,7 @@ const sendInvitations = async () => {
 
 .role-select {
   padding: 8px;
-  border: 1px solid #ccc;
+  border: 2px solid #ccc;
   border-radius: 4px;
   flex-grow: 1;
 }
@@ -318,6 +339,7 @@ const sendInvitations = async () => {
   border-radius: 4px;
   font-weight: bold;
   cursor: pointer;
+  margin-bottom: 10px;
 }
 
 .invite-all-btn:hover:not(.disabled) {
@@ -339,7 +361,6 @@ const sendInvitations = async () => {
   /* Use Flexbox for horizontal layout */
   display: flex;
   align-items: center;
-
   padding: 12px 15px;
   border-bottom: 1px solid #f0f0f0;
   background-color: white;
@@ -418,5 +439,30 @@ const sendInvitations = async () => {
   color: #28a745;
   font-size: 0.85em;
   font-weight: 600;
+}
+
+.users-list {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ccc;
+}
+
+.close-container {
+  text-align: right;
+  padding-top: 15px;
+  margin-top: 10px;
+}
+
+.close-btn {
+  padding: 10px 20px;
+  background-color: rgba(158, 156, 156, 1);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  background-color: rgba(158, 156, 156, 0.5);
 }
 </style>

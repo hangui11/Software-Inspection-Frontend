@@ -31,7 +31,6 @@ const current_project = ref('')
 const copyStatus = ref('initial')
 
 const isModalOpen = ref(false)
-const modalContentRef = ref(null)
 
 const showShareWindow = () => {
   isModalOpen.value = true
@@ -315,8 +314,8 @@ const addDefect = () => {
 
 <template>
   <div v-if="isModalOpen" class="share-modal" @click.self="isModalOpen = false">
-    <div ref="modalContentRef">
-      <ShareWindow :projectId="projectId" :userId="user_id_stored" />
+    <div>
+      <ShareWindow :projectId="projectId" :userId="user_id_stored" @close="isModalOpen = false" />
     </div>
   </div>
 

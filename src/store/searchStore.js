@@ -19,6 +19,9 @@ export const useSearchStore = defineStore('search', {
     // Optional: action to clear state after component is done
     clearSearch() {
       this.filteredProjects = []
+      this.projects = []
+      this.avatar = ''
+      this.username = ''
     },
   },
   persist: {
@@ -43,6 +46,13 @@ export const userInformationStore = defineStore('user_information', {
         (this.avatar = avatarUrl),
         (this.username = userName),
         (this.userid = userId))
+    },
+    clearUserInfo() {
+      this.recent_projects = []
+      this.projects = []
+      this.avatar = ''
+      this.username = ''
+      this.userid = ''
     },
   },
   persist: {
