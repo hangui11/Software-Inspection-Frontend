@@ -14,6 +14,7 @@ export const appwriteConfig = {
   checklistsCollectionId: 'checklist',
   checklistItemsCollectionId: 'checklist_items',
   storageBucketId: '6926e205001c81bfb74a'
+  projectInvitationCollectionId: 'project_invitation',
 }
 
 const client = new Client()
@@ -168,7 +169,7 @@ export const resetPassword = async (secret, user_id, password) => {
 }
 
 export const getUserEmail = async (user_id) => {
-  console.log(user_id)
+  // console.log(user_id)
   try {
     const result = await databases.listDocuments(
       appwriteConfig.databaseId,
@@ -177,7 +178,7 @@ export const getUserEmail = async (user_id) => {
     )
     const user = result.documents[0]
 
-    console.log(user)
+    // console.log(user)
     return user.email
   } catch (error) {
     throw new Error(error)
@@ -201,7 +202,7 @@ export const getUserProjects = async (username) => {
     // console.log(projects.documents)
     return projects.documents
   } catch (error) {
-    console.log(error)
+    // console.log(error)
     throw new Error(error)
   }
 }
@@ -226,6 +227,7 @@ export const createProject = async (project_name, userid) => {
       {
         project_name: project_name,
         members: 1,
+        usersIds: [userid],
         update_date: todayDateTime,
       },
     )
@@ -279,22 +281,36 @@ export const joinProject = async (project_id, userid, role) => {
 
     // Check B: User Duplication (FIXED: access the total property)
     if (existUserProject.total > 0) {
-      throw new Error(`The user ${username} is already in the project.`)
+      throw new Error(`The user ${userid} is already in the project.`)
     }
 
+    const projectDocument = projectsResult.documents[0]
+    projectDocument.usersIds.push(userid)
     // --- 3. CREATE NEW LINK DOCUMENT ---
-    const newUserProject = await databases.createDocument(
-      appwriteConfig.databaseId,
-      appwriteConfig.userProjectsCollectionId,
-      ID.unique(),
-      {
-        project_id: project_id,
-        user_id: username,
-        user_role: role,
-      },
-    )
-    console.log('User-Project link created:', newUserProject)
-    return newUserProject
+    const [newUserProject, updatedProject] = await Promise.all([
+      databases.createDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.userProjectsCollectionId,
+        ID.unique(),
+        {
+          project_id: project_id,
+          user_id: userid,
+          user_role: role,
+        },
+      ),
+
+      databases.updateDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.projectCollectionId,
+        projectDocument.$id,
+        {
+          members: projectDocument.members + 1,
+          usersIds: projectDocument.usersIds,
+        },
+      ),
+    ])
+    console.log(`User ${userid} successfully joined project ${project_id}.`)
+    return { user_project: newUserProject, project: updatedProject }
   } catch (error) {
     console.error('Error creating user project link:', error)
     throw error
@@ -447,6 +463,54 @@ export const createProductDocument = async (projectId, userId, fileName, fileId,
     return newProduct
   } catch (error) {
     console.error("Error creating product doc:", error)
+export const updateUserRoles = async (project_id, updatedUsers) => {
+  if (!project_id || !updatedUsers || updatedUsers.length === 0) {
+    console.warn('Project ID or user list is missing.')
+    return []
+  }
+
+  const userIdsToQuery = updatedUsers.map((u) => u.id)
+  const updatePromises = []
+  try {
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userProjectsCollectionId,
+      [Query.equal('project_id', project_id), Query.equal('user_id', userIdsToQuery)],
+    )
+    const currentDocs = response.documents
+
+    for (const updatedUser of updatedUsers) {
+      const currentDoc = currentDocs.find((doc) => doc.user_id === updatedUser.id)
+
+      if (!currentDoc) {
+        console.warn(`Relationship document not found for user ${updatedUser.id}. Skipping update.`)
+        continue
+      }
+      if (currentDoc.user_role != updatedUser.role) {
+        console.log(
+          `Role change detected for user ${updatedUser.id}: ${currentDoc.role} -> ${updatedUser.role}`,
+        )
+        const promise = databases
+          .updateDocument(
+            appwriteConfig.databaseId,
+            appwriteConfig.userProjectsCollectionId,
+            currentDoc.$id,
+            {
+              user_role: updatedUser.role,
+            },
+          )
+          .catch((err) => {
+            console.error(`Failed to update role for user ${updatedUser.id}:`, err)
+          })
+        updatePromises.push(promise)
+      }
+    }
+    await Promise.all(updatePromises)
+    console.log(`Attempted ${updatePromises.length} role updates.`)
+
+    return updatePromises
+  } catch (error) {
+    console.error('Error in updateUserRoles:', error)
     throw error
   }
 }
@@ -539,6 +603,88 @@ export const addDefectTransaction = async (defectData, engineerData) => {
     }
     return newDefect
   } catch (error) {
+export const getUserInfoByEmail = async (user_email) => {
+  try {
+    const user = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      [Query.equal('email', user_email), Query.limit(1)],
+    )
+    if (user.total > 0) {
+      return user.documents[0]
+    } else {
+      alert(`The email ${user_email} is not existed`)
+      return null
+    }
+  } catch (error) {
+    console.error('Error fetching user info:', error)
+    throw error
+  }
+}
+
+export const checkUserInvited = async (projec_id, user_id) => {
+  try {
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectInvitationCollectionId,
+      [
+        Query.equal('project_id', projec_id),
+        Query.equal('invited_user_id', user_id),
+        Query.limit(1),
+      ],
+    )
+    return response.total > 0
+  } catch (error) {
+    console.log('Check invited user error: ' + error)
+  }
+}
+
+export const sendUserInvitations = async (project_id, invitedUserList, project_user_id) => {
+  for (const invitedUser of invitedUserList) {
+    try {
+      const invitedUserInfo = await getUserInfoByEmail(invitedUser.email)
+      const checkInvitedUser = await checkUserInvited(project_id, invitedUserInfo.$id)
+      if (checkInvitedUser) {
+        alert(`The user with ${invitedUser.email} is already invited`)
+        return
+      }
+      if (invitedUserInfo) {
+        await databases.createDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.projectInvitationCollectionId,
+          ID.unique(),
+          {
+            invited_user_id: invitedUserInfo.$id,
+            project_id: project_id,
+            role: invitedUser.role,
+            project_user_id: project_user_id,
+          },
+        )
+        console.log(`Invitation sent to ${invitedUserInfo.email}`)
+      }
+    } catch (iterationError) {
+      // Handle specific error for one user invitation failure without stopping the loop
+      console.error(`Failed to send invitation for user: ${invitedUser.email}`, iterationError)
+    }
+  }
+  console.log('All invitations processed.')
+}
+
+export const getUserInfoById = async (user_id) => {
+  try {
+    const user = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      [Query.equal('$id', user_id), Query.limit(1)],
+    )
+    if (user.total > 0) {
+      return user.documents[0]
+    } else {
+      alert(`The user with ${user_id} is not existed`)
+      return null
+    }
+  } catch (error) {
+    console.error('Error fetching user info:', error)
     throw error
   }
 }
@@ -644,6 +790,130 @@ export const getProductChecklists = async (projectId, productId) => {
     return result
   } catch (error) {
     console.error("Error fetching checklists:", error)
+export const getProjectById = async (project_id) => {
+  try {
+    const project = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectCollectionId,
+      [Query.contains('$id', project_id), Query.limit(1)],
+    )
+    if (project.total > 0) {
+      return project.documents[0]
+    } else {
+      alert(`The project with ${project_id} is not existed`)
+      return null
+    }
+  } catch (error) {
+    console.log('Error getting project by ID: ', error)
+  }
+}
+
+// In the invited user page
+export const showUserInvitation = async (user_id) => {
+  const invitations = []
+
+  try {
+    const userInvitations = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectInvitationCollectionId,
+      [Query.equal('invited_user_id', user_id), Query.equal('status', 'pending')],
+    )
+
+    for (const userInvitation of userInvitations.documents) {
+      const inviterUserId = userInvitation.project_user_id
+      const projectId = userInvitation.project_id
+      const [projectUserInfo, projectInfo] = await Promise.all([
+        // Fetches the user info of the inviter
+        getUserInfoById(inviterUserId),
+        // Fetches the project details
+        getProjectById(projectId),
+      ])
+      if (projectUserInfo && projectInfo) {
+        invitations.push({
+          invitation_id: userInvitation.$id, // Include the invitation ID for later use (Accept/Decline)
+          project_id: projectId,
+          project_name: projectInfo.project_name, // Assuming the project object has a 'name' field
+          role: userInvitation.role,
+          isRead: userInvitation.read_by_invited,
+          inviter_user: {
+            id: projectUserInfo.$id,
+            name: projectUserInfo.username, // Assuming the user object has a 'name' field
+            email: projectUserInfo.email, // Assuming the user object has an 'email' field
+          },
+        })
+      } else {
+        console.warn(
+          `Skipping invitation for project ID ${projectId}: Missing project or inviter user info.`,
+        )
+      }
+    }
+    return invitations
+  } catch (error) {
+    console.error('Error showing user invitations:', error)
+    // If an error occurs (e.g., connection issue), return an empty array or rethrow
+    return []
+    // throw error;
+  }
+}
+
+// In the inviter page
+export const showUserRequest = async (user_id) => {
+  try {
+    await deleteReadRequests(user_id)
+
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectInvitationCollectionId,
+      [Query.equal('project_user_id', user_id)],
+    )
+
+    const sentRequests = response.documents
+
+    if (sentRequests.length === 0) {
+      return []
+    }
+
+    // 1. Correct Typo and Prepare Promises
+    const userPromises = sentRequests.map((request) => getUserInfoById(request.invited_user_id))
+    const projectPromises = sentRequests.map((request) => getProjectById(request.project_id))
+
+    // 2. Await concurrent fetches
+    const invitedUserInfos = await Promise.all(userPromises)
+    const projectInfos = await Promise.all(projectPromises)
+
+    const requests = sentRequests
+      .map((request, index) => {
+        const invitedUserInfo = invitedUserInfos[index]
+
+        // 🔑 NEW: Access the corresponding project info object
+        const project = projectInfos[index]
+        if (!invitedUserInfo) {
+          console.warn(
+            `Could not find invited user info for ID: ${request.invited_user_id}. Skipping.`,
+          )
+          return null
+        }
+
+        // 🔑 CORRECTION & COMPLETION: Merge project data
+        return {
+          request_id: request.$id,
+          status: request.status,
+          project_id: request.project_id,
+          project_name: project.project_name,
+          role: request.role,
+          isRead: request.read_by_owner,
+          invited_user: {
+            id: invitedUserInfo.$id,
+            name: invitedUserInfo.username,
+            email: invitedUserInfo.email,
+          },
+        }
+      })
+      .filter((r) => r !== null)
+
+    return requests
+  } catch (error) {
+    console.error('Error showing user requests:', error)
     return []
   }
 }
@@ -721,3 +991,113 @@ export const deleteChecklistItemDB = async (itemId) => {
   )
 }
 
+export const readAllMessages = async (invitationMessages, requestMessages) => {
+  const invitationPromises = invitationMessages.map((message) => {
+    // Only update if it's currently marked as unread to save calls
+    if (message.read_by_invited !== true) {
+      return databases
+        .updateDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.projectInvitationCollectionId,
+          message.invitation_id, // This is the $id of the invitation document
+          {
+            read_by_invited: true,
+          },
+        )
+        .catch((error) => {
+          // Log individual error but don't stop Promise.all from running
+          console.error(`Error marking invitation ${message.invitation_id} as read:`, error)
+          return null // Return null to prevent Promise.all from failing
+        })
+    }
+    return Promise.resolve(null) // Resolve immediately if already read
+  })
+
+  const requestPromises = requestMessages.map((message) => {
+    // Only update if it's currently marked as unread
+    if (message.isRead !== true) {
+      return databases
+        .updateDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.projectInvitationCollectionId,
+          message.request_id, // This is the $id of the request document
+          {
+            read_by_owner: true,
+          },
+        )
+        .catch((error) => {
+          // Log individual error but don't stop Promise.all from running
+          console.error(`Error marking request ${message.request_id} as read:`, error)
+          return null
+        })
+    }
+    return Promise.resolve(null)
+  })
+
+  try {
+    await Promise.all(invitationPromises)
+    await Promise.all(requestPromises)
+
+    console.log('All visible messages processed and marked as read.')
+  } catch (error) {
+    console.error('Critical error during readAllMessages operation:', error)
+  }
+}
+
+export const updateInvitationStatus = async (invitation_id, status) => {
+  try {
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectInvitationCollectionId,
+      invitation_id,
+      {
+        read_by_owner: false,
+        status: status,
+      },
+    )
+  } catch (error) {
+    console.log(`Error updating invitation status with ${invitation_id}: `, error)
+  }
+}
+
+export const deleteReadRequests = async (user_id) => {
+  try {
+    const checkRequest = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectInvitationCollectionId,
+      [
+        Query.equal('project_user_id', user_id),
+        Query.notEqual('status', 'pending'),
+        Query.equal('read_by_owner', true),
+      ],
+    )
+
+    const documentsToDelete = checkRequest.documents
+
+    if (documentsToDelete.length === 0) {
+      console.log('No completed and read requests found to delete.')
+      return
+    }
+
+    const deletionPromises = documentsToDelete.map((doc) =>
+      databases
+        .deleteDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.projectInvitationCollectionId,
+          doc.$id,
+        )
+        .catch((error) => {
+          // Log individual error but allow Promise.all to continue
+          console.error(`Error deleting invitation ID ${doc.$id}:`, error)
+          return null
+        }),
+    )
+
+    await Promise.all(deletionPromises)
+
+    console.log(`Successfully deleted ${documentsToDelete.length} completed and read requests.`)
+  } catch (error) {
+    console.error('Critical error during deletion of read requests:', error)
+    // throw error;
+  }
+}

@@ -472,6 +472,12 @@ const inspectionSummary = computed(() => {
 </script>
 
 <template>
+  <div v-if="isModalOpen" class="share-modal" @click.self="isModalOpen = false">
+    <div>
+      <ShareWindow :projectId="projectId" :userId="user_id_stored" @close="isModalOpen = false" />
+    </div>
+  </div>
+
   <div class="app-container">
 
     <aside class="sidebar">
