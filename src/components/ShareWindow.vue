@@ -14,9 +14,11 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  user_role: {
+    type: String,
+    required: true,
+  },
 })
-
-const current_user_role = ref('')
 
 // --- State for Invitation Form ---
 const newInvite = ref({
@@ -43,8 +45,18 @@ const user_email = ref('')
 onMounted(async () => {
   user_email.value = await getUserEmail(props.userId)
   projectUsers.value = await getProjectAllUsers(props.projectId)
-  current_user_role.value = projectUsers.value.find((p) => p.id === props.userId).role
-  console.log(current_user_role.value)
+  projectUsers.value.sort((a, b) => {
+    // If user 'a' is the current user, move 'a' to the front (return -1)
+    if (a.email === user_email.value) {
+      return -1
+    }
+    // If user 'b' is the current user, move 'b' to the front (return 1)
+    if (b.email === user_email.value) {
+      return 1
+    }
+    // Otherwise, maintain the current order (return 0)
+    return 0
+  })
 })
 
 onUnmounted(async () => {
@@ -120,7 +132,7 @@ const closeWindow = () => {
       <div class="close-emoji" @click="closeWindow">❌</div>
     </div>
 
-    <div class="invite-form-box" v-if="current_user_role == 'owner'">
+    <div class="invite-form-box" v-if="props.user_role === 'owner'">
       <p class="form-label">Email Address:</p>
       <div class="input-group">
         <input
@@ -160,12 +172,12 @@ const closeWindow = () => {
       </ul>
     </div>
 
-    <p v-else-if="current_user_role == 'owner' && !inviteList.length" class="empty-list-message">
+    <p v-else-if="props.user_role == 'owner' && !inviteList.length" class="empty-list-message">
       No users staged for invitation.
     </p>
     <p v-else>Request sharing permission.</p>
 
-    <div class="modal-invite" v-if="current_user_role == 'owner'">
+    <div class="modal-invite" v-if="props.user_role == 'owner'">
       <button
         @click="sendInvitations"
         :disabled="inviteList.length === 0"
@@ -183,7 +195,7 @@ const closeWindow = () => {
           <div class="user-email">{{ user.email }}</div>
           <div class="user-role-control">
             <select
-              v-if="user.role != 'owner' && current_user_role.value == 'owner'"
+              v-if="user.role != 'owner' && props.user_role == 'owner'"
               v-model="user.role"
               @change="$emit('update-user-role', user.id, user.role)"
               class="role-select"

@@ -1,4 +1,5 @@
 import { ID, Client, Account, Databases, Query, Storage } from 'appwrite'
+import { data } from 'autoprefixer'
 
 export const appwriteConfig = {
   endpoints: 'https://fra.cloud.appwrite.io/v1',
@@ -1086,5 +1087,164 @@ export const deleteReadRequests = async (user_id) => {
   } catch (error) {
     console.error('Critical error during deletion of read requests:', error)
     // throw error;
+  }
+}
+
+export const leaveProject = async (project_id, user_id) => {
+  try {
+    // --- STEP 1: Concurrently list ALL parent documents to be deleted and the project doc ---
+    const [checklists, defects, engineerData, userProject, invitationProject, projectDocList] =
+      await Promise.all([
+        // List Checklists created by the user (non-shared)
+        databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.checklistsCollectionId, [
+          Query.equal('userId', user_id),
+          Query.equal('projectId', project_id),
+          Query.equal('isShared', false),
+        ]),
+        // List Defects
+        databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.defectsCollectionId, [
+          Query.equal('userId', user_id),
+          Query.equal('projectId', project_id),
+        ]),
+        // List Engineer Data records
+        databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.engineersDataCollectionId,
+          [Query.equal('userId', user_id), Query.equal('projectId', project_id)],
+        ),
+        // List the UserProject relationship document
+        databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.userProjectsCollectionId,
+          [Query.equal('user_id', user_id), Query.equal('project_id', project_id), Query.limit(1)],
+        ),
+        databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.projectInvitationCollectionId,
+          [Query.equal('project_id', project_id)],
+        ),
+        // List the main Project document
+        databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.projectCollectionId, [
+          Query.equal('$id', project_id),
+          Query.limit(1),
+        ]),
+      ])
+
+    const projectDocument = projectDocList.documents[0]
+    const checklistIds = checklists.documents.map((doc) => doc.$id)
+
+    let allDeletionPromises = []
+
+    // --- STEP 2: Fetch Nested Checklist Items (Sequential Step) ---
+    let checklistItems = { documents: [] }
+    if (checklistIds.length > 0) {
+      // 💡 Using Query.listDocument (or Query.contains) to fetch child documents
+      // Note: Query.contains is limited to ~100 values. If you have more, you must loop.
+      try {
+        checklistItems = await databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.checklistItemsCollectionId,
+          [
+            Query.equal('checklistId', checklistIds), // Assumes Appwrite supports passing array to Query.equal
+            // If Appwrite doesn't support an array in Query.equal, use Query.contains('checklistId', checklistIds)
+          ],
+        )
+      } catch (fetchError) {
+        console.warn(
+          'Could not fetch checklist items with array query. Falling back to empty list.',
+          fetchError,
+        )
+        // If the array query fails, checklistItems remains empty.
+      }
+    }
+
+    // --- STEP 3: Prepare ALL deletion promises (including checklistItems) ---
+
+    // Helper function to map list results to deleteDocument promises
+    const mapToDeletePromises = (listResult, collectionId) =>
+      listResult.documents.map((doc) =>
+        databases
+          .deleteDocument(appwriteConfig.databaseId, collectionId, doc.$id)
+          .catch((err) =>
+            console.error(`Failed to delete document ${doc.$id} from ${collectionId}:`, err),
+          ),
+      )
+
+    // Add deletion promises for all document types
+    allDeletionPromises.push(
+      ...mapToDeletePromises(checklists, appwriteConfig.checklistsCollectionId),
+    )
+    allDeletionPromises.push(...mapToDeletePromises(defects, appwriteConfig.defectsCollectionId))
+    allDeletionPromises.push(
+      ...mapToDeletePromises(engineerData, appwriteConfig.engineersDataCollectionId),
+    )
+    allDeletionPromises.push(
+      ...mapToDeletePromises(userProject, appwriteConfig.userProjectsCollectionId),
+    )
+    allDeletionPromises.push(
+      ...mapToDeletePromises(checklistItems, appwriteConfig.checklistItemsCollectionId),
+    )
+    allDeletionPromises.push(
+      ...mapToDeletePromises(invitationProject, appwriteConfig.projectInvitationCollectionId),
+    )
+
+    // --- STEP 4: Handle Project Update (Decrement members and remove ID) ---
+    if (projectDocument) {
+      const updatedUsersIds = projectDocument.usersIds.filter((id) => id !== user_id)
+      allDeletionPromises.push(
+        databases.updateDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.projectCollectionId,
+          projectDocument.$id,
+          {
+            members: Math.max(0, projectDocument.members - 1),
+            usersIds: updatedUsersIds,
+          },
+        ),
+      )
+    } else {
+      console.warn(`Project document ID ${project_id} not found.`)
+    }
+
+    // --- STEP 5: Execute all deletions and the single update concurrently ---
+    await Promise.all(allDeletionPromises)
+
+    console.log(
+      `User ${user_id} successfully left project ${project_id}. All associated records deleted.`,
+    )
+  } catch (error) {
+    console.error('Error leaving project:', error)
+    throw error
+  }
+}
+
+export const deleteProject = async (project_id, user_id) => {
+  try {
+    await leaveProject(project_id, user_id)
+
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectCollectionId,
+      project_id,
+    )
+    console.log(`Project ID ${project_id} has been permanently deleted.`)
+  } catch (error) {
+    console.error('Error deleting project:', error)
+    throw error
+  }
+}
+
+export const getUserProjectById = async (project_id, user_id) => {
+  try {
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userProjectsCollectionId,
+      [Query.equal('user_id', user_id), Query.equal('project_id', project_id), Query.limit(1)],
+    )
+    if (response.total > 0) return response.documents[0].user_role
+    return ''
+  } catch (error) {
+    console.log(error)
+    return ''
   }
 }

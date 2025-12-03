@@ -54,39 +54,18 @@ const updatePageHeight = () => {
   })
 }
 onMounted(async () => {
-  const isProjectsMissing = !projects_stored.value || projects_stored.value.length === 0
-  const isRecentProjectsMissing =
-    !recent_projects_stored.value || recent_projects_stored.value.length === 0
-  const isUsernameMissing = !username_stored.value
-  const isAvatarMissing = !avatar_stored.value
-  const isUserIdMissing = !userid_stored.value
-  if (
-    isProjectsMissing ||
-    isRecentProjectsMissing ||
-    isUsernameMissing ||
-    isAvatarMissing ||
-    isUserIdMissing
-  ) {
-    try {
-      const current_user = await getCurrentUser()
-      console.log(current_user)
-      username.value = current_user.username
-      user_avatar.value = current_user.avatar
-      user_id.value = current_user.$id
-    } catch (error) {
-      alert('Do not have user logged ' + error)
-    }
-    await loadProjects()
-    updatePageHeight()
-    isLoading.value = false
-  } else {
-    user_projects.value = projects_stored.value
-    recent_projects.value = recent_projects_stored.value
-    user_avatar.value = avatar_stored.value
-    username.value = username_stored.value
-    user_id.value = userid_stored.value
-    isLoading.value = false
+  try {
+    const current_user = await getCurrentUser()
+    console.log(current_user)
+    username.value = current_user.username
+    user_avatar.value = current_user.avatar
+    user_id.value = current_user.$id
+  } catch (error) {
+    alert('Do not have user logged ' + error)
   }
+  await loadProjects()
+  updatePageHeight()
+  isLoading.value = false
 })
 
 onUnmounted(async () => {

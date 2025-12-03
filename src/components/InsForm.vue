@@ -26,6 +26,7 @@ import {
   addChecklistItemDB,
   updateChecklistItemStatus,
   deleteChecklistItemDB,
+  getUserProjectById,
 } from '@/lib/appwrite.js'
 
 const props = defineProps({
@@ -70,6 +71,7 @@ const current_project = ref('')
 const copyStatus = ref('initial')
 const isModalOpen = ref(false)
 const isExitModalOpen = ref(false)
+const current_user_role = ref('')
 
 const showShareWindow = () => {
   isModalOpen.value = true
@@ -109,6 +111,7 @@ onMounted(async () => {
 
     products.value = await getProjectProducts(projectId.value)
 
+    current_user_role.value = await getUserProjectById(projectId.value, currentUserId.value)
     if (!current_project.value) {
       console.error('Project not found with ID:', projectId.value)
     }
@@ -560,7 +563,12 @@ const inspectionSummary = computed(() => {
 <template>
   <div v-if="isModalOpen" class="modal" @click.self="isModalOpen = false">
     <div>
-      <ShareWindow :projectId="projectId" :userId="currentUserId" @close="isModalOpen = false" />
+      <ShareWindow
+        :projectId="projectId"
+        :userId="currentUserId"
+        :user_role="current_user_role"
+        @close="isModalOpen = false"
+      />
     </div>
   </div>
 
@@ -569,6 +577,9 @@ const inspectionSummary = computed(() => {
       <ExitProjectWindow
         :projectId="projectId"
         :userId="currentUserId"
+        :project="current_project"
+        :loadProjects="props.loadProjects"
+        :user_role="current_user_role"
         @close="isExitModalOpen = false"
       />
     </div>
