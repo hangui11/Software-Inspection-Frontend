@@ -703,8 +703,9 @@ export const updateEngineerInfo = async (projectId, productId, userId, size, tim
 
   // Calculations
   const timeHours = time / 60
-  const rate = timeHours > 0 ? (size / timeHours).toFixed(2) : 0
+  const rate = timeHours > 0 ? Math.round(size / timeHours) : 0;
   const est_yield = 85.0
+  console.log("Updating document ID:", doc.$id)
 
   await databases.updateDocument(
     appwriteConfig.databaseId,
@@ -725,7 +726,7 @@ export const getUsernameById = async (userId) => {
     const userDocs = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.userCollectionId,
-      [Query.equal('account_id', userId)],
+      [Query.equal('$id', userId)],
     )
     return userDocs.total > 0 ? userDocs.documents[0].username : 'Unknown'
   } catch (e) {

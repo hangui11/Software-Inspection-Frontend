@@ -180,6 +180,7 @@ const loadProductData = async () => {
 
   // Resolve Names
   for (const eng of engineers.value) {
+
     if (!resolvedEngineerNames.value[eng.userId]) {
       if (eng.userId === currentUserId.value) {
         resolvedEngineerNames.value[eng.userId] = currentUsername.value
@@ -283,6 +284,7 @@ const saveEngineerInfo = async () => {
       engineerForm.value.size,
       engineerForm.value.time,
     )
+
     showEngineerPopup.value = false
     await loadProductData()
   } catch (e) {
