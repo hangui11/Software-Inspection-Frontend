@@ -526,20 +526,66 @@ export const getProductData = async (projectId, productId) => {
     return { engineers: [], defects: [] }
   }
 }
-
 // 4. Add Defect Transaction
 export const addDefectTransaction = async (defectData, engineerData) => {
   try {
-    // A. Create Defect
-    const newDefect = await databases.createDocument(
+    // A. Check for Existing Defect based on defectId and productId
+    const existingDefects = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.defectsCollectionId,
-      ID.unique(),
-      defectData,
+      [
+        Query.equal('productId', defectData.productId),
+        Query.equal('defectId', defectData.defectId), // Query by the manual defect ID (line number)
+      ],
     )
 
-    // B. Check/Update Engineer Data
-    const existing = await databases.listDocuments(
+    let defectDoc; // Variable to hold the document reference
+
+    if (existingDefects.total > 0) {
+      // --- 1. DEFECT ALREADY EXISTS (UPDATE) ---
+      defectDoc = existingDefects.documents[0]
+      const currentFinders = defectDoc.foundByUsers || [] // Get existing list
+      const currentUserId = defectData.userId
+
+      // If the current user has NOT already reported this exact defect ID
+      if (!currentFinders.includes(currentUserId)) {
+
+        // Add the new user to the list of finders
+        const newFinders = [...currentFinders, currentUserId]
+
+        await databases.updateDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.defectsCollectionId,
+          defectDoc.$id,
+          {
+            // Update the list of users who found it
+            foundByUsers: newFinders,
+            // NOTE: The description, severity, etc., remain tied to the first user's entry.
+          },
+        )
+      }
+
+      // If the user already reported it, we do nothing to the defect document.
+
+    } else {
+      // --- 2. DEFECT IS NEW (CREATE) ---
+
+      // Create the defect document, initializing the foundByUsers array with the current user
+      defectDoc = await databases.createDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.defectsCollectionId,
+        ID.unique(),
+        {
+          ...defectData,
+          foundByUsers: [defectData.userId], // Initialize with the first finder
+        },
+      )
+    }
+
+    // B. Check/Update Engineer Data (This part remains largely the same)
+    // Note: The engineer's major/minor count is now independent of the defect being unique.
+    // Every time an engineer REPORTS a defect, their personal count increments.
+    const existingEngineer = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.engineersDataCollectionId,
       [
@@ -549,9 +595,8 @@ export const addDefectTransaction = async (defectData, engineerData) => {
       ],
     )
 
-    if (existing.total > 0) {
-      // Update existing
-      const doc = existing.documents[0]
+    if (existingEngineer.total > 0) {
+      const doc = existingEngineer.documents[0]
       await databases.updateDocument(
         appwriteConfig.databaseId,
         appwriteConfig.engineersDataCollectionId,
@@ -562,7 +607,7 @@ export const addDefectTransaction = async (defectData, engineerData) => {
         },
       )
     } else {
-      // Create new
+      // Create new engineer record (initial report)
       await databases.createDocument(
         appwriteConfig.databaseId,
         appwriteConfig.engineersDataCollectionId,
@@ -573,14 +618,14 @@ export const addDefectTransaction = async (defectData, engineerData) => {
           productId: engineerData.productId,
           major: defectData.severity === 'Major' ? 1 : 0,
           minor: defectData.severity === 'Minor' ? 1 : 0,
-          size: 0,
-          time: 0,
-          rate: 0,
-          est_yield: 0,
+          size: 0, time: 0, rate: 0, est_yield: 0,
         },
       )
     }
-    return newDefect
+
+    // Return the defect document (either the new one or the updated existing one)
+    return defectDoc
+
   } catch (error) {
     console.error('Error adding defect transaction:', error)
     throw error
@@ -705,7 +750,6 @@ export const updateEngineerInfo = async (projectId, productId, userId, size, tim
   const timeHours = time / 60
   const rate = timeHours > 0 ? Math.round(size / timeHours) : 0;
   const est_yield = 85.0
-  console.log("Updating document ID:", doc.$id)
 
   await databases.updateDocument(
     appwriteConfig.databaseId,
