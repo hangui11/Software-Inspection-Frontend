@@ -93,13 +93,58 @@ const engineerColumns = computed(() => {
 const defectTotals = computed(() => {
   const totals = { maj: 0, min: 0, A: 0, B: 0 }
   engineerColumns.value.forEach((col) => (totals[col.userId] = 0))
+
+  totals['others'] = 0
+
   defects.value.forEach((d) => {
     if (d.severity === 'Major') totals.maj++
     else totals.min++
     if (totals[d.userId] !== undefined) totals[d.userId]++
+    if (d.userId === currentUserId.value) totals.A++
+    else totals.B++
+
   })
   return totals
 })
+
+
+const uniqueTotals = computed(() => {
+  const totals = { A: 0, B: 0 }
+
+  // Add per-engineer totals
+  engineerColumns.value.forEach(col => {
+    totals[col.userId] = 0
+  })
+
+  // 1. Loop defects (each defect already unique, containing foundByUsers array)
+  defects.value.forEach(d => {
+    const finders = new Set(d.foundByUsers || [])
+
+    // Number of engineers who found this defect
+    const count = finders.size
+
+    // Only unique when exactly ONE engineer found it
+    if (count !== 1) return
+
+    // Identify that single engineer
+    const [onlyUser] = Array.from(finders)
+
+    // --- A/B logic ---
+    if (onlyUser === currentUserId.value) {
+      totals.A++  // unique to A
+    } else {
+      totals.B++  // unique to others
+    }
+
+    // --- Individual engineer column ---
+    if (totals[onlyUser] !== undefined) {
+      totals[onlyUser]++
+    }
+  })
+
+  return totals
+})
+
 
 // --- LIFECYCLE ---
 onMounted(async () => {
@@ -183,6 +228,7 @@ const loadProductData = async () => {
 
   // Resolve Names
   for (const eng of engineers.value) {
+
     if (!resolvedEngineerNames.value[eng.userId]) {
       if (eng.userId === currentUserId.value) {
         resolvedEngineerNames.value[eng.userId] = currentUsername.value
@@ -286,6 +332,7 @@ const saveEngineerInfo = async () => {
       engineerForm.value.size,
       engineerForm.value.time,
     )
+
     showEngineerPopup.value = false
     await loadProductData()
   } catch (e) {
@@ -782,13 +829,30 @@ const inspectionSummary = computed(() => {
                 <td>{{ d.description }}</td>
                 <td class="text-center bg-light">{{ d.severity === 'Major' ? 1 : '' }}</td>
                 <td class="text-center bg-light">{{ d.severity === 'Minor' ? 1 : '' }}</td>
-                <td v-for="col in engineerColumns" :key="col.userId" class="text-center">
-                  {{ d.userId === col.userId ? '1' : '' }}
-                </td>
-                <td></td>
-                <td></td>
+                <td v-for="col in engineerColumns" :key="col.userId" class="col-xs text-center">
+        {{ d.foundByUsers && d.foundByUsers.includes(col.userId) ? '1' : '' }}
+      </td>
+                <td class="text-center">{{  d.foundByUsers.includes(currentUserId) ? '1' : '' }}</td>
+                <td class="text-center">
+  {{ d.foundByUsers.some(u => u !== currentUserId) ? '1' : '' }}
+</td>
+
               </tr>
             </tbody>
+
+            <tfoot>
+              <tr class="summary-row total-row">
+                <td colspan="2" class="text-right label-cell">Unique Defects</td>
+                <td class="text-center">{{ "" }}</td>
+                <td class="text-center">{{ "" }}</td>
+                <td v-for="col in engineerColumns" :key="col.userId" class="text-center">
+                  {{ uniqueTotals[col.userId] }}
+                </td>
+                <td class="text-center">{{ uniqueTotals.A }}</td>
+                <td class="text-center">{{ uniqueTotals.B }}</td>
+              </tr>
+            </tfoot>
+
             <tfoot>
               <tr class="summary-row total-row">
                 <td colspan="2" class="text-right label-cell">Total</td>
@@ -797,10 +861,13 @@ const inspectionSummary = computed(() => {
                 <td v-for="col in engineerColumns" :key="col.userId" class="text-center">
                   {{ defectTotals[col.userId] }}
                 </td>
-                <td>0</td>
-                <td>0</td>
+                <td class="text-center">{{ defectTotals.A }}</td>
+                <td class="text-center">{{ defectTotals.B }}</td>
               </tr>
             </tfoot>
+
+
+
           </table>
         </div>
 
