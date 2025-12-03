@@ -112,6 +112,7 @@ const findAllRelatedProjects = () => {
 // When selecting a project
 const selectProject = (project) => {
   input.value = project.project_name
+  filterProjects()
   showDropdown.value = false
   nextTick(() => {
     if (inputRef.value) {

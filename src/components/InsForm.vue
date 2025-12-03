@@ -4,7 +4,9 @@ import { ref, onMounted, computed, onBeforeUnmount, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { userInformationStore } from '@/store/searchStore'
 import share_icon from '@/assets/icons/share.png'
+import door_exit_icon from '@/assets/icons/door_exit.svg'
 import ShareWindow from './ShareWindow.vue'
+import ExitProjectWindow from './ExitProjectWindow.vue'
 
 // Import API functions
 import {
@@ -67,10 +69,15 @@ const fileInput = ref(null)
 const current_project = ref('')
 const copyStatus = ref('initial')
 const isModalOpen = ref(false)
+const isExitModalOpen = ref(false)
 
 const showShareWindow = () => {
   isModalOpen.value = true
   console.log('Modal state updated to:', isModalOpen.value)
+}
+
+const showExitProjectWindow = () => {
+  isExitModalOpen.value = true
 }
 
 // --- COMPUTED ---
@@ -551,9 +558,19 @@ const inspectionSummary = computed(() => {
 </script>
 
 <template>
-  <div v-if="isModalOpen" class="share-modal" @click.self="isModalOpen = false">
+  <div v-if="isModalOpen" class="modal" @click.self="isModalOpen = false">
     <div>
       <ShareWindow :projectId="projectId" :userId="currentUserId" @close="isModalOpen = false" />
+    </div>
+  </div>
+
+  <div v-if="isExitModalOpen" class="modal" @click.self="isExitModalOpen = false">
+    <div>
+      <ExitProjectWindow
+        :projectId="projectId"
+        :userId="currentUserId"
+        @close="isExitModalOpen = false"
+      />
     </div>
   </div>
 
@@ -568,7 +585,7 @@ const inspectionSummary = computed(() => {
           @click="copyIdToClipboard"
           :title="copyMessage"
         >
-          <template v-if="copyStatus === 'copied'">
+          <div v-if="copyStatus === 'copied'">
             <svg
               class="copy-icon"
               style="color: #52c41a"
@@ -579,14 +596,14 @@ const inspectionSummary = computed(() => {
             >
               <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
             </svg>
-          </template>
-          <template v-else>
+          </div>
+          <div v-else>
             <svg class="copy-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
               <path
                 d="M16 1H4C2.9 1 2 1.9 2 3v14h2V3h12V1zm3 4H8C6.9 5 6 5.9 6 7v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
               />
             </svg>
-          </template>
+          </div>
         </div>
 
         <span v-if="copyStatus !== 'initial'" class="copy-feedback">
@@ -625,6 +642,11 @@ const inspectionSummary = computed(() => {
         <h3 class="share-text-label">Share</h3>
         <img class="share-icon" :src="share_icon" alt="Share Icon" width="30" height="30" />
       </div>
+
+      <div class="exit-component" @click="showExitProjectWindow">
+        <h3 class="exit-text-label">Exit Project</h3>
+        <img class="exit-icon" :src="door_exit_icon" width="30" height="30" />
+      </div>
     </aside>
 
     <div
@@ -661,7 +683,6 @@ const inspectionSummary = computed(() => {
             >
               {{ tab.name }}
 
-              [Image of collaborative team icon]
               <span v-if="tab.isShared" class="shared-icon">👥</span>
             </div>
             <button class="add-tab-btn" @click="addNewTab">+</button>
@@ -879,7 +900,17 @@ const inspectionSummary = computed(() => {
 </template>
 
 <style scoped>
-.share-modal {
+/* .v-enter-active,
+.v-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.v-enter-from,
+.v-leave-to {
+  opacity: 0;
+} */
+
+.modal {
   height: 100%;
   width: 100%;
   position: fixed;
@@ -910,6 +941,7 @@ const inspectionSummary = computed(() => {
   flex-shrink: 0;
   padding: 0;
 }
+
 .header-container {
   display: flex;
   justify-content: space-between;
@@ -917,6 +949,7 @@ const inspectionSummary = computed(() => {
   padding: 20px;
   background-color: #1a252f;
   background-color: #096dd9;
+  z-index: 10;
 }
 .header-container h3 {
   margin: 0;
@@ -942,11 +975,6 @@ const inspectionSummary = computed(() => {
   background-color: #eee;
   border-color: #bbb;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); /* Soft shadow on hover */
-}
-
-/* Text display */
-.project-id-text {
-  margin-right: 10px;
 }
 
 /* Icon styling */
@@ -1056,6 +1084,31 @@ const inspectionSummary = computed(() => {
 }
 
 .share-icon {
+  filter: brightness(0) invert(1);
+}
+
+.exit-component {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: rgb(210, 56, 56);
+  /* border-radius: 6px; */
+  cursor: pointer;
+}
+
+.exit-component:hover {
+  background-color: rgba(210, 56, 56, 0.5);
+}
+
+.exit-component .exit-text-label {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.exit-icon {
   filter: brightness(0) invert(1);
 }
 
