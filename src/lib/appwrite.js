@@ -147,12 +147,15 @@ export const existUserOrEmail = async (username, email) => {
 }
 
 export const verification = async () => {
-  account.createVerification('https://sunshine-movies.vercel.app/verfication')
+  account.createVerification('https://software-inspection-frontend.vercel.app/verfication')
 }
 
 export const forgotPassword = async (email) => {
   try {
-    await account.createRecovery(email, 'http://localhost:5173/forgotPassword')
+    await account.createRecovery(
+      email,
+      'https://software-inspection-frontend.vercel.app/forgotPassword',
+    )
   } catch (error) {
     console.log(error)
     throw new Error(error)
@@ -193,13 +196,17 @@ export const getUserProjects = async (username) => {
       [Query.equal('user_id', username)],
     )
     const projectIds = userProjects.documents.map((doc) => doc.project_id)
-    // console.log(projectIds)
+    console.log(projectIds)
+    if (projectIds.length == 0) {
+      return []
+    }
     const projects = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.projectCollectionId,
       [Query.contains('$id', projectIds), Query.orderDesc('update_date')],
     )
     // console.log(projects.documents)
+
     return projects.documents
   } catch (error) {
     // console.log(error)
