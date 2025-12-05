@@ -1,25 +1,21 @@
 <script setup>
 import { useRouter } from 'vue-router'
-import { ref, onBeforeUnmount, onMounted, nextTick } from 'vue'
+import { ref, onBeforeUnmount, onMounted, nextTick, watch } from 'vue'
 import { useSearchStore, userInformationStore } from '@/store/searchStore'
 import search from '@/assets/icons/search.png'
 import signout from '@/assets/icons/signout.svg'
 import lucky_coin from '@/assets/icons/lucky-coin.svg'
 import calendar from '@/assets/icons/calendar.svg'
 import message_icon from '@/assets/icons/message.svg'
-import {
-  logOut,
-  showUserRequest,
-  showUserInvitation,
-  readAllMessages,
-  joinProject,
-  updateInvitationStatus,
-} from '@/lib/appwrite'
+import { logOut, readAllMessages, joinProject, updateInvitationStatus } from '@/lib/appwrite'
+import { storeToRefs } from 'pinia'
 
 const router = useRouter()
 const searchStore = useSearchStore()
 const userInfoStore = userInformationStore()
 const hasNewMessage = ref(false)
+const { calendar_messages: userCalendaMessages } = storeToRefs(userInfoStore)
+
 const props = defineProps({
   avatar: {
     type: String,
@@ -39,6 +35,14 @@ const props = defineProps({
   },
   loadProjects: {
     type: Function,
+    required: true,
+  },
+  invitationMessages: {
+    type: Array,
+    required: true,
+  },
+  requestMessages: {
+    type: Array,
     required: true,
   },
 })
@@ -68,8 +72,23 @@ const log_out = async () => {
 const filteredProjects = ref([])
 const showDropdown = ref(false)
 const searchContainer = ref(null)
-const invitationMessages = ref([]) // invite the user in projects
-const requestMessages = ref([]) // show invited user status to the inviter
+const invitationMessagesContainer = ref(props.invitationMessages)
+const requestMessagesContainer = ref(props.requestMessages)
+const userCalendaMessagesContainer = ref(userCalendaMessages)
+
+watch(
+  userCalendaMessages,
+  (newValue, oldValue) => {
+    // This code runs every time userCalendaMessages changes
+    console.log('🔔 Calendar Messages Updated!')
+
+    // Optional: Log the new count or content for debugging
+    console.log(`Old count: ${oldValue ? oldValue.length : 0}`)
+    console.log(`New count: ${newValue ? newValue.length : 0}`)
+    checkNewMessage()
+  },
+  { deep: true },
+) // Optional: Use { deep: true } if the array contents change but the array reference doesn't.
 
 const handleInput = () => {
   // 1. Trigger the filtering logic
@@ -132,21 +151,29 @@ const handleClickOutside = (event) => {
 const showMessageBox = async () => {
   hasNewMessage.value = false
   displayMessageBox.value = !displayMessageBox.value
-  await readAllMessages(invitationMessages.value, requestMessages.value)
+  await readAllMessages(
+    invitationMessagesContainer.value,
+    requestMessagesContainer.value,
+    userCalendaMessagesContainer.value,
+  )
+}
+
+const checkNewMessage = () => {
+  const unreadInvitationExists = invitationMessagesContainer.value.some((p) => !p.isRead)
+  const unreadRequestExists = requestMessagesContainer.value.some((p) => !p.isRead)
+  const unreadCalendarExists = userCalendaMessagesContainer.value.some((p) => !p.isRead)
+
+  hasNewMessage.value = unreadInvitationExists || unreadRequestExists || unreadCalendarExists
 }
 
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
   try {
-    invitationMessages.value = await showUserInvitation(props.user_id)
-    requestMessages.value = await showUserRequest(props.user_id)
-    console.log(invitationMessages)
-    console.log(requestMessages)
+    // console.log(invitationMessagesContainer.value)
+    // console.log(requestMessagesContainer.value)
+    // console.log(userCalendaMessagesContainer.value)
 
-    const unreadInvitationExists = invitationMessages.value.some((p) => !p.isRead)
-    const unreadRequestExists = requestMessages.value.some((p) => !p.isRead)
-
-    hasNewMessage.value = unreadInvitationExists || unreadRequestExists
+    checkNewMessage()
   } catch (error) {
     console.log(error)
   }
@@ -157,7 +184,7 @@ onBeforeUnmount(() => {
 })
 
 const acceptInvitation = async (invitation_id, project_id, role, invited_user_id) => {
-  invitationMessages.value = invitationMessages.value.filter(
+  invitationMessagesContainer.value = invitationMessagesContainer.value.filter(
     (message) => message.invitation_id !== invitation_id,
   )
   await joinProject(project_id, invited_user_id, role)
@@ -166,10 +193,14 @@ const acceptInvitation = async (invitation_id, project_id, role, invited_user_id
 }
 
 const rejectInvitation = async (invitation_id) => {
-  invitationMessages.value = invitationMessages.value.filter(
+  invitationMessagesContainer.value = invitationMessagesContainer.value.filter(
     (message) => message.invitation_id !== invitation_id,
   )
   await updateInvitationStatus(invitation_id, 'rejected')
+}
+
+const showCalendar = () => {
+  router.push('/dashboard/calendar')
 }
 </script>
 
@@ -221,7 +252,7 @@ const rejectInvitation = async (invitation_id) => {
         <div class="messagebox" v-if="displayMessageBox">
           <div class="messages-list-container">
             <div
-              v-for="message in invitationMessages"
+              v-for="message in invitationMessagesContainer"
               :key="message.invitation_id"
               class="message-item invitation-item"
             >
@@ -256,7 +287,7 @@ const rejectInvitation = async (invitation_id) => {
             </div>
 
             <div
-              v-for="message in requestMessages"
+              v-for="message in requestMessagesContainer"
               :key="message.request_id"
               class="message-item request-item"
             >
@@ -274,6 +305,29 @@ const rejectInvitation = async (invitation_id) => {
                 >
                   {{ message.status }}
                 </strong>
+              </p>
+            </div>
+
+            <div
+              v-for="message in userCalendaMessagesContainer"
+              :key="message.id"
+              class="message-item calendar-item"
+            >
+              <p class="calendar-text-message">
+                🔔 Reminder: Your
+                <strong class="event-type">{{ message.type }}</strong>
+                for project
+                <strong class="project-name">{{ message.project_name }}</strong>
+                (Topic: {{ message.content }}) is scheduled on
+                <span class="date-range"
+                  >{{ message.start_date }}
+                  <span v-if="message.start_date !== message.end_date">
+                    to {{ message.end_date }}
+                  </span>
+                </span>
+                from
+                <span class="time-range">{{ message.start_time }} to {{ message.end_time }}</span
+                >.
               </p>
             </div>
           </div>
@@ -590,6 +644,50 @@ input#search {
 
 .reject-btn:hover {
   background-color: #f8d7da;
+}
+
+/* --- CALENDAR ITEM STYLING (TEXT-FOCUSED) --- */
+
+.message-item.calendar-item {
+  /* Basic container styling */
+  background-color: #f7f9fc;
+  border-left: 5px solid #007bff;
+  padding: 10px 15px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.calendar-text-message {
+  /* Base font size and line height */
+  margin: 0;
+  font-size: 0.95em;
+  line-height: 1.5;
+}
+
+.calendar-text-message strong {
+  font-weight: 700;
+}
+
+/* Specific text styling for quick scanning */
+.event-type {
+  color: #007bff; /* Primary color for event type */
+  text-transform: capitalize;
+}
+
+.project-name {
+  color: #333;
+}
+
+.date-range,
+.time-range {
+  font-weight: 600;
+  color: #555; /* Slightly darker color for date/time */
+}
+
+/* Optional: Improve the visual look of the bold reminder icon/text */
+.calendar-text-message > strong:first-child {
+  color: #e6a23c; /* A warning color for the 'Reminder' tag */
+  margin-right: 5px;
 }
 
 @media screen and (max-width: 768px) {

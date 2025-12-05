@@ -19,6 +19,7 @@ import SignUpPage from './components/SignUpPage.vue'
 import ForgotPasswordPage from './components/ForgotPwdPage.vue'
 import NotFoundPage from './components/NotFoundPage.vue'
 import InsFormPage from './components/InsForm.vue'
+import CalendarPage from './components/CalendarPage.vue'
 
 import DashboardProjectsPage from './components/DashboardProjects.vue'
 import DashboardLayout from './components/DashboardLayout.vue'
@@ -75,6 +76,11 @@ const routes = [
         path: 'ins_form/:project_id/:product_id',
         name: 'dashboard-project-ins-form',
         component: InsFormPage,
+      },
+      {
+        path: 'calendar',
+        name: 'dashboard-calendar',
+        component: CalendarPage,
       },
     ],
   },

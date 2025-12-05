@@ -1,5 +1,4 @@
 import { ID, Client, Account, Databases, Query, Storage } from 'appwrite'
-import { data } from 'autoprefixer'
 
 export const appwriteConfig = {
   endpoints: 'https://fra.cloud.appwrite.io/v1',
@@ -9,12 +8,13 @@ export const appwriteConfig = {
   userCollectionId: 'users',
   userProjectsCollectionId: 'user_projects',
   projectCollectionId: 'projects',
-  engineersDataCollectionId: 'enigineers_data', // <-- Update this with your actual engineers collection ID
-  defectsCollectionId: 'defects', // <-- Update this with your actual defects collection ID
+  engineersDataCollectionId: 'enigineers_data',
+  defectsCollectionId: 'defects',
   productsCollectionId: 'products',
   checklistsCollectionId: 'checklist',
   checklistItemsCollectionId: 'checklist_items',
   projectInvitationCollectionId: 'project_invitation',
+  userCalendarCollectionId: 'user_calendar_list',
 }
 
 const client = new Client()
@@ -46,6 +46,7 @@ export const logOut = async () => {
     const session = await account.deleteSession('current')
     return session
   } catch (error) {
+    console.log('Error in logging out: ', error)
     return null
     // alert(error.message)
   }
@@ -146,12 +147,15 @@ export const existUserOrEmail = async (username, email) => {
 }
 
 export const verification = async () => {
-  account.createVerification('https://sunshine-movies.vercel.app/verfication')
+  account.createVerification('https://software-inspection-frontend.vercel.app/verfication')
 }
 
 export const forgotPassword = async (email) => {
   try {
-    await account.createRecovery(email, 'http://localhost:5173/forgotPassword')
+    await account.createRecovery(
+      email,
+      'https://software-inspection-frontend.vercel.app/forgotPassword',
+    )
   } catch (error) {
     console.log(error)
     throw new Error(error)
@@ -192,13 +196,17 @@ export const getUserProjects = async (username) => {
       [Query.equal('user_id', username)],
     )
     const projectIds = userProjects.documents.map((doc) => doc.project_id)
-    // console.log(projectIds)
+    console.log(projectIds)
+    if (projectIds.length == 0) {
+      return []
+    }
     const projects = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.projectCollectionId,
       [Query.contains('$id', projectIds), Query.orderDesc('update_date')],
     )
     // console.log(projects.documents)
+
     return projects.documents
   } catch (error) {
     // console.log(error)
@@ -540,7 +548,7 @@ export const addDefectTransaction = async (defectData, engineerData) => {
       ],
     )
 
-    let defectDoc; // Variable to hold the document reference
+    let defectDoc // Variable to hold the document reference
 
     if (existingDefects.total > 0) {
       // --- 1. DEFECT ALREADY EXISTS (UPDATE) ---
@@ -550,7 +558,6 @@ export const addDefectTransaction = async (defectData, engineerData) => {
 
       // If the current user has NOT already reported this exact defect ID
       if (!currentFinders.includes(currentUserId)) {
-
         // Add the new user to the list of finders
         const newFinders = [...currentFinders, currentUserId]
 
@@ -567,7 +574,6 @@ export const addDefectTransaction = async (defectData, engineerData) => {
       }
 
       // If the user already reported it, we do nothing to the defect document.
-
     } else {
       // --- 2. DEFECT IS NEW (CREATE) ---
 
@@ -619,14 +625,16 @@ export const addDefectTransaction = async (defectData, engineerData) => {
           productId: engineerData.productId,
           major: defectData.severity === 'Major' ? 1 : 0,
           minor: defectData.severity === 'Minor' ? 1 : 0,
-          size: 0, time: 0, rate: 0, est_yield: 0,
+          size: 0,
+          time: 0,
+          rate: 0,
+          est_yield: 0,
         },
       )
     }
 
     // Return the defect document (either the new one or the updated existing one)
     return defectDoc
-
   } catch (error) {
     console.error('Error adding defect transaction:', error)
     throw error
@@ -652,13 +660,13 @@ export const getUserInfoByEmail = async (user_email) => {
   }
 }
 
-export const checkUserInvited = async (projec_id, user_id) => {
+export const checkUserInvited = async (project_id, user_id) => {
   try {
     const response = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.projectInvitationCollectionId,
       [
-        Query.equal('project_id', projec_id),
+        Query.equal('project_id', project_id),
         Query.equal('invited_user_id', user_id),
         Query.limit(1),
       ],
@@ -749,7 +757,7 @@ export const updateEngineerInfo = async (projectId, productId, userId, size, tim
 
   // Calculations
   const timeHours = time / 60
-  const rate = timeHours > 0 ? Math.round(size / timeHours) : 0;
+  const rate = timeHours > 0 ? Math.round(size / timeHours) : 0
   const est_yield = 85.0
 
   await databases.updateDocument(
@@ -775,6 +783,7 @@ export const getUsernameById = async (userId) => {
     )
     return userDocs.total > 0 ? userDocs.documents[0].username : 'Unknown'
   } catch (e) {
+    console.log('Error getting user name: ', e)
     return 'Unknown'
   }
 }
@@ -1024,7 +1033,11 @@ export const deleteChecklistItemDB = async (itemId) => {
   )
 }
 
-export const readAllMessages = async (invitationMessages, requestMessages) => {
+export const readAllMessages = async (
+  invitationMessages,
+  requestMessages,
+  userCalendarMessages,
+) => {
   const invitationPromises = invitationMessages.map((message) => {
     // Only update if it's currently marked as unread to save calls
     if (message.read_by_invited !== true) {
@@ -1067,9 +1080,29 @@ export const readAllMessages = async (invitationMessages, requestMessages) => {
     return Promise.resolve(null)
   })
 
+  const userCalendarPromises = userCalendarMessages.map((message) => {
+    if (message.isRead !== true) {
+      return databases
+        .updateDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.userCalendarCollectionId,
+          message.id,
+          {
+            isRead: true,
+          },
+        )
+        .catch((error) => {
+          console.error(`Error marking user calendar ${message.id} as read:`, error)
+          return null
+        })
+    }
+    return Promise.resolve(null)
+  })
+
   try {
     await Promise.all(invitationPromises)
     await Promise.all(requestPromises)
+    await Promise.all(userCalendarPromises)
 
     console.log('All visible messages processed and marked as read.')
   } catch (error) {
@@ -1138,42 +1171,52 @@ export const deleteReadRequests = async (user_id) => {
 export const leaveProject = async (project_id, user_id) => {
   try {
     // --- STEP 1: Concurrently list ALL parent documents to be deleted and the project doc ---
-    const [checklists, defects, engineerData, userProject, invitationProject, projectDocList] =
-      await Promise.all([
-        // List Checklists created by the user (non-shared)
-        databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.checklistsCollectionId, [
-          Query.equal('userId', user_id),
-          Query.equal('projectId', project_id),
-          Query.equal('isShared', false),
-        ]),
-        // List Defects
-        databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.defectsCollectionId, [
-          Query.equal('userId', user_id),
-          Query.equal('projectId', project_id),
-        ]),
-        // List Engineer Data records
-        databases.listDocuments(
-          appwriteConfig.databaseId,
-          appwriteConfig.engineersDataCollectionId,
-          [Query.equal('userId', user_id), Query.equal('projectId', project_id)],
-        ),
-        // List the UserProject relationship document
-        databases.listDocuments(
-          appwriteConfig.databaseId,
-          appwriteConfig.userProjectsCollectionId,
-          [Query.equal('user_id', user_id), Query.equal('project_id', project_id), Query.limit(1)],
-        ),
-        databases.listDocuments(
-          appwriteConfig.databaseId,
-          appwriteConfig.projectInvitationCollectionId,
-          [Query.equal('project_id', project_id)],
-        ),
-        // List the main Project document
-        databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.projectCollectionId, [
-          Query.equal('$id', project_id),
-          Query.limit(1),
-        ]),
-      ])
+    const [
+      checklists,
+      defects,
+      engineerData,
+      userProject,
+      invitationProject,
+      userCalendar,
+      projectDocList,
+    ] = await Promise.all([
+      // List Checklists created by the user (non-shared)
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.checklistsCollectionId, [
+        Query.equal('userId', user_id),
+        Query.equal('projectId', project_id),
+        Query.equal('isShared', false),
+      ]),
+      // List Defects
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.defectsCollectionId, [
+        Query.equal('userId', user_id),
+        Query.equal('projectId', project_id),
+      ]),
+      // List Engineer Data records
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.engineersDataCollectionId, [
+        Query.equal('userId', user_id),
+        Query.equal('projectId', project_id),
+      ]),
+      // List the UserProject relationship document
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.userProjectsCollectionId, [
+        Query.equal('user_id', user_id),
+        Query.equal('project_id', project_id),
+        Query.limit(1),
+      ]),
+      databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.projectInvitationCollectionId,
+        [Query.equal('project_id', project_id)],
+      ),
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.userCalendarCollectionId, [
+        Query.equal('project_id', project_id),
+        Query.equal('user_id', user_id),
+      ]),
+      // List the main Project document
+      databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.projectCollectionId, [
+        Query.equal('$id', project_id),
+        Query.limit(1),
+      ]),
+    ])
 
     const projectDocument = projectDocList.documents[0]
     const checklistIds = checklists.documents.map((doc) => doc.$id)
@@ -1232,6 +1275,9 @@ export const leaveProject = async (project_id, user_id) => {
     allDeletionPromises.push(
       ...mapToDeletePromises(invitationProject, appwriteConfig.projectInvitationCollectionId),
     )
+    allDeletionPromises.push(
+      ...mapToDeletePromises(userCalendar, appwriteConfig.userCalendarCollectionId),
+    )
 
     // --- STEP 4: Handle Project Update (Decrement members and remove ID) ---
     if (projectDocument) {
@@ -1286,10 +1332,274 @@ export const getUserProjectById = async (project_id, user_id) => {
       appwriteConfig.userProjectsCollectionId,
       [Query.equal('user_id', user_id), Query.equal('project_id', project_id), Query.limit(1)],
     )
-    if (response.total > 0) return response.documents[0].user_role
+    if (response.total > 0) return response.documents[0]
     return ''
   } catch (error) {
     console.log(error)
     return ''
   }
+}
+
+export const saveCalendarInformation = async (
+  user_id,
+  project_id,
+  startDate, // JavaScript Date object
+  endDate, // JavaScript Date object
+  startTime,
+  endTime,
+  content,
+  type,
+) => {
+  // 1. Combine Date objects with time strings and convert to ISO format.
+  //    This creates the precise Datetime needed for Appwrite comparison.
+  const newStartDateTimeBefore = new Date(
+    `${startDate.toISOString().split('T')[0]}T${startTime}:00Z`,
+  )
+  const newEndDateTimeBefore = new Date(`${endDate.toISOString().split('T')[0]}T${endTime}:00Z`)
+
+  const newStartDateTime = new Date(newStartDateTimeBefore.getTime() + 24 * 60 * 60 * 1000)
+  const newEndDateTime = new Date(newEndDateTimeBefore.getTime() + 24 * 60 * 60 * 1000)
+
+  if (isNaN(newStartDateTime.getTime()) || isNaN(newEndDateTime.getTime())) {
+    throw new Error('Invalid start or end date/time provided. Please check the date format.')
+  }
+
+  // Appwrite Datetime queries require ISO 8601 strings
+  const startISO = newStartDateTime.toISOString()
+  const endISO = newEndDateTime.toISOString()
+  console.log(startISO, endISO)
+
+  try {
+    // --- 🔍 OVERLAP CHECK ---
+
+    // Checks if any existing event starts before the new one ends AND ends after the new one starts.
+    const overlapQueries = [
+      Query.equal('user_id', user_id),
+      // Existing event must START before the new event ENDS
+      Query.lessThan('start_date', endISO),
+      // Existing event must END after the new event STARTS
+      Query.greaterThan('end_date', startISO),
+    ]
+
+    const overlappingDocuments = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCalendarCollectionId,
+      overlapQueries,
+    )
+
+    if (overlappingDocuments.total > 0) {
+      const docs = overlappingDocuments.documents
+
+      for (const doc of docs) {
+        const startDate = new Date(doc.start_date)
+        const endDate = new Date(doc.end_date)
+
+        const startUTCHour = startDate.getUTCHours()
+        const startUTCMinute = startDate.getUTCMinutes()
+        const startformattedUTCTime = `${String(startUTCHour).padStart(2, '0')}:${String(startUTCMinute).padStart(2, '0')}`
+
+        const endUTCHour = endDate.getUTCHours()
+        const endUTCMinute = endDate.getUTCMinutes()
+        const endformattedUTCTime = `${String(endUTCHour).padStart(2, '0')}:${String(endUTCMinute).padStart(2, '0')}`
+
+        if (startformattedUTCTime < endTime && endformattedUTCTime > startTime) {
+          throw new Error('Overlap detected. Time slot is busy.')
+        }
+      }
+    }
+
+    // --- ✅ SAVE NEW DOCUMENT (If No Overlap) ---
+
+    await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCalendarCollectionId,
+      ID.unique(),
+      {
+        user_id: user_id,
+        project_id: project_id,
+        // Save the combined Datetime ISO strings
+        start_date: startISO,
+        end_date: endISO,
+        content: content,
+        type: type,
+      },
+    )
+
+    console.log('Calendar information saved successfully.')
+  } catch (error) {
+    // If the error originated from the overlap check, re-throw the custom message.
+    if (error.message.includes('Overlap detected')) {
+      throw error
+    }
+    // Otherwise, throw a general Appwrite/Database error.
+    console.error('Error saving calendar information:', error)
+    throw new Error(
+      `Failed to save event: ${error.message || 'Check database connection/permissions.'}`,
+    )
+  }
+}
+
+export const saveCalendarProjectInformation = async (
+  project_id,
+  startDate,
+  endDate,
+  startTime, // 🔑 Added missing parameter
+  endTime,
+  content,
+  type,
+) => {
+  let projectUsers = []
+
+  try {
+    // 1. Fetch the project and extract user IDs
+    const project = await getProjectById(project_id)
+
+    if (!project || !project.usersIds || project.usersIds.length === 0) {
+      console.warn(`Project ${project_id} not found or has no users.`)
+      return
+    }
+
+    projectUsers = project.usersIds
+    console.log(`Scheduling event for ${projectUsers.length} users.`)
+
+    // 2. Loop through all users and save the event for each one
+    const savePromises = projectUsers.map((user_id) => {
+      // Assuming saveCalendarInformation handles overlap checks internally
+      return saveCalendarInformation(
+        user_id,
+        project_id,
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        content,
+        type,
+      )
+    })
+
+    // Wait for all save operations to complete (or fail)
+    await Promise.allSettled(savePromises)
+
+    console.log(`Project event scheduling complete for project ID: ${project_id}`)
+  } catch (error) {
+    console.error(`🛑 Error in saveCalendarProjectInformation for project ${project_id}:`, error)
+    // Throwing an error here allows the calling function to know that the overall process failed.
+    throw new Error(`Failed to schedule project event: ${error.message}`)
+  }
+}
+
+export const getUserCalendar = async (user_id) => {
+  try {
+    const userCalendar = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCalendarCollectionId,
+      [Query.equal('user_id', user_id)],
+    )
+
+    if (userCalendar.total > 0) {
+      // 🔑 CRITICAL FIX: Map over documents and convert ISO date strings to Date objects.
+      const documentsWithDates = userCalendar.documents.map((doc) => {
+        return {
+          ...doc,
+          // The database returns these as ISO strings, converting them allows direct access to hours/minutes
+          start_date: new Date(doc.start_date),
+          end_date: new Date(doc.end_date),
+        }
+      })
+
+      return documentsWithDates
+    } else {
+      return null
+    }
+  } catch (error) {
+    console.error('Error fetching user calendar:', error)
+    // You might want to throw the error instead of returning null on failure
+    throw error
+  }
+}
+
+export const changeUserCalendarReminded = async (id, status) => {
+  try {
+    const updatedDocument = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCalendarCollectionId,
+      id,
+      {
+        reminded: status,
+        isRead: false,
+      },
+    )
+
+    console.log(`Document ID ${id} 'reminded' status updated to: ${status}`)
+    return updatedDocument
+  } catch (error) {
+    console.error(`Error updating document ID ${id} in Appwrite:`, error)
+    throw new Error(`Failed to update reminder status for ID ${id}.`)
+  }
+}
+
+export const showUserCalendar = async (user_id) => {
+  const userCalendarList = []
+
+  // Define the date formatting options: Day, Month, Day of Month.
+  // The browser will typically include the year if it differs from the current year.
+  const dateOptions = {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric', // Include year for full accuracy
+  }
+
+  try {
+    const userCalendars = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCalendarCollectionId,
+      // Query to get events for the user that are marked as 'reminded'
+      [Query.equal('user_id', user_id), Query.equal('reminded', true)],
+    )
+
+    if (userCalendars.total > 0) {
+      const userCalendarsDoc = userCalendars.documents
+
+      for (const userCalendar of userCalendarsDoc) {
+        // 1. Convert Appwrite string dates to Date objects
+        const startDate = new Date(userCalendar.start_date)
+        const endDate = new Date(userCalendar.end_date)
+
+        // 2. Format Times (UTC) - This logic remains correct
+        const startUTCHour = startDate.getUTCHours()
+        const startUTCMinute = startDate.getUTCMinutes()
+        const startformattedUTCTime = `${String(startUTCHour).padStart(2, '0')}:${String(startUTCMinute).padStart(2, '0')}`
+
+        const endUTCHour = endDate.getUTCHours()
+        const endUTCMinute = endDate.getUTCMinutes()
+        const endformattedUTCTime = `${String(endUTCHour).padStart(2, '0')}:${String(endUTCMinute).padStart(2, '0')}`
+
+        // 3. 🔑 FIX: Format Dates for Display
+        const formattedStartDate = startDate.toLocaleDateString('en-US', dateOptions)
+        const formattedEndDate = endDate.toLocaleDateString('en-US', dateOptions)
+
+        const projectInfo = await getProjectById(userCalendar.project_id)
+        const project_name = projectInfo.project_name
+
+        userCalendarList.push({
+          id: userCalendar.$id,
+          project_id: userCalendar.project_id,
+          project_name: project_name,
+          type: userCalendar.type,
+          start_time: startformattedUTCTime,
+          end_time: endformattedUTCTime,
+          start_date: formattedStartDate,
+          end_date: formattedEndDate,
+          isRead: userCalendar.isRead,
+          content: userCalendar.content,
+        })
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching user calendar for display:', error)
+    // Return an empty list or re-throw the error
+  }
+
+  return userCalendarList
 }
