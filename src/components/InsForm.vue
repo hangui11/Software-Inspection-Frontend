@@ -102,22 +102,20 @@ const defectTotals = computed(() => {
     if (totals[d.userId] !== undefined) totals[d.userId]++
     if (d.userId === currentUserId.value) totals.A++
     else totals.B++
-
   })
   return totals
 })
-
 
 const uniqueTotals = computed(() => {
   const totals = { A: 0, B: 0 }
 
   // Add per-engineer totals
-  engineerColumns.value.forEach(col => {
+  engineerColumns.value.forEach((col) => {
     totals[col.userId] = 0
   })
 
   // 1. Loop defects (each defect already unique, containing foundByUsers array)
-  defects.value.forEach(d => {
+  defects.value.forEach((d) => {
     const finders = new Set(d.foundByUsers || [])
 
     // Number of engineers who found this defect
@@ -131,9 +129,9 @@ const uniqueTotals = computed(() => {
 
     // --- A/B logic ---
     if (onlyUser === currentUserId.value) {
-      totals.A++  // unique to A
+      totals.A++ // unique to A
     } else {
-      totals.B++  // unique to others
+      totals.B++ // unique to others
     }
 
     // --- Individual engineer column ---
@@ -145,7 +143,6 @@ const uniqueTotals = computed(() => {
   return totals
 })
 
-
 // --- LIFECYCLE ---
 onMounted(async () => {
   const idFromRoute = route.params.project_id
@@ -156,7 +153,9 @@ onMounted(async () => {
 
     products.value = await getProjectProducts(projectId.value)
 
-    current_user_role.value = await getUserProjectById(projectId.value, currentUserId.value)
+    const user_project_info = await getUserProjectById(projectId.value, currentUserId.value)
+
+    current_user_role.value = user_project_info.user_role
     if (!current_project.value) {
       console.error('Project not found with ID:', projectId.value)
     }
@@ -228,7 +227,6 @@ const loadProductData = async () => {
 
   // Resolve Names
   for (const eng of engineers.value) {
-
     if (!resolvedEngineerNames.value[eng.userId]) {
       if (eng.userId === currentUserId.value) {
         resolvedEngineerNames.value[eng.userId] = currentUsername.value
@@ -830,21 +828,20 @@ const inspectionSummary = computed(() => {
                 <td class="text-center bg-light">{{ d.severity === 'Major' ? 1 : '' }}</td>
                 <td class="text-center bg-light">{{ d.severity === 'Minor' ? 1 : '' }}</td>
                 <td v-for="col in engineerColumns" :key="col.userId" class="col-xs text-center">
-        {{ d.foundByUsers && d.foundByUsers.includes(col.userId) ? '1' : '' }}
-      </td>
-                <td class="text-center">{{  d.foundByUsers.includes(currentUserId) ? '1' : '' }}</td>
+                  {{ d.foundByUsers && d.foundByUsers.includes(col.userId) ? '1' : '' }}
+                </td>
+                <td class="text-center">{{ d.foundByUsers.includes(currentUserId) ? '1' : '' }}</td>
                 <td class="text-center">
-  {{ d.foundByUsers.some(u => u !== currentUserId) ? '1' : '' }}
-</td>
-
+                  {{ d.foundByUsers.some((u) => u !== currentUserId) ? '1' : '' }}
+                </td>
               </tr>
             </tbody>
 
             <tfoot>
               <tr class="summary-row total-row">
                 <td colspan="2" class="text-right label-cell">Unique Defects</td>
-                <td class="text-center">{{ "" }}</td>
-                <td class="text-center">{{ "" }}</td>
+                <td class="text-center">{{ '' }}</td>
+                <td class="text-center">{{ '' }}</td>
                 <td v-for="col in engineerColumns" :key="col.userId" class="text-center">
                   {{ uniqueTotals[col.userId] }}
                 </td>
@@ -865,9 +862,6 @@ const inspectionSummary = computed(() => {
                 <td class="text-center">{{ defectTotals.B }}</td>
               </tr>
             </tfoot>
-
-
-
           </table>
         </div>
 
