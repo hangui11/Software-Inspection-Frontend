@@ -1603,3 +1603,21 @@ export const showUserCalendar = async (user_id) => {
 
   return userCalendarList
 }
+
+export const updateProjectStatus = async (project_id, status) => {
+  try {
+    const updatedDocument = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectCollectionId,
+      project_id,
+      {
+        project_status: status,
+      },
+    )
+
+    return updatedDocument
+  } catch (error) {
+    console.error(`Error updating project ID ${project_id} status:`, error)
+    throw new Error(`Failed to update project status for ID ${project_id}.`)
+  }
+}

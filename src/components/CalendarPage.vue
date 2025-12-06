@@ -448,6 +448,15 @@ const changeReminderState = async (item) => {
   border: 1px solid #096dd9;
 }
 
+/* In your component's <style> block or main stylesheet */
+
+.action-button.secondary:disabled {
+  background-color: #ccc !important;
+  color: #666 !important;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .action-button.active {
   /* x-offset | y-offset | blur | spread | color */
   box-shadow: 0 0 0 3px rgba(9, 109, 217, 0.5); /* A blue shadow/ring */

@@ -27,6 +27,7 @@ import {
   updateChecklistItemStatus,
   deleteChecklistItemDB,
   getUserProjectById,
+  updateProjectStatus,
 } from '@/lib/appwrite.js'
 
 const props = defineProps({
@@ -105,7 +106,7 @@ const defectTotals = computed(() => {
     // We use a Set to ensure we don't double count if the data is messy
     const finders = new Set(d.foundByUsers || [])
 
-    finders.forEach(userId => {
+    finders.forEach((userId) => {
       // --- A/B Logic ---
       if (userId === currentUserId.value) {
         totals.A++
@@ -269,6 +270,8 @@ const handleFileUpload = async (event) => {
     // A. Upload to Appwrite Storage
     const uploadedFile = await uploadFileToStorage(file)
 
+    await updateProjectStatus(projectId.value, 'In Progress')
+
     // B. Create Product Document in DB
     // 🔴 FIX: ensure projectId.value and currentUserId.value are valid
     if (!projectId.value || !currentUserId.value) {
@@ -318,6 +321,7 @@ const addDefect = async () => {
     }
 
     await addDefectTransaction(defectPayload, engineerPayload)
+    await updateProjectStatus(projectId.value, 'In Progress')
 
     showAddPopup.value = false
     newDefect.value = { id: '', desc: '', type: 'Major' }
@@ -629,7 +633,6 @@ const inspectionSummary = computed(() => {
     rate,
   }
 })
-
 </script>
 
 <template>
@@ -701,7 +704,7 @@ const inspectionSummary = computed(() => {
           ref="fileInput"
           @change="handleFileUpload"
           style="display: none"
-          accept=".pdf, .txt, text/plain"
+          accept=".pdf, .txt, text/plain, .js, .py, .ts, .java, .cpp, .cs, .sql, .sh, .php, .json"
         />
         <button class="upload-btn" @click="triggerUpload"><span>☁️</span> Upload Product</button>
       </div>
@@ -855,13 +858,12 @@ const inspectionSummary = computed(() => {
                 <td class="text-center bg-light">{{ d.severity === 'Major' ? 1 : '' }}</td>
                 <td class="text-center bg-light">{{ d.severity === 'Minor' ? 1 : '' }}</td>
                 <td v-for="col in engineerColumns" :key="col.userId" class="col-xs text-center">
-                        {{ d.foundByUsers && d.foundByUsers.includes(col.userId) ? '1' : '' }}
-                      </td>
-                                <td class="text-center">{{  d.foundByUsers.includes(currentUserId) ? '1' : '' }}</td>
-                                <td class="text-center">
-                  {{ d.foundByUsers.some(u => u !== currentUserId) ? '1' : '' }}
+                  {{ d.foundByUsers && d.foundByUsers.includes(col.userId) ? '1' : '' }}
                 </td>
-
+                <td class="text-center">{{ d.foundByUsers.includes(currentUserId) ? '1' : '' }}</td>
+                <td class="text-center">
+                  {{ d.foundByUsers.some((u) => u !== currentUserId) ? '1' : '' }}
+                </td>
               </tr>
             </tbody>
 
@@ -906,12 +908,7 @@ const inspectionSummary = computed(() => {
           <div class="summary-controls">
             <div class="control-group">
               <label>Meeting Duration (min): </label>
-              <input
-                type="number"
-                v-model="meetingDuration"
-                class="small-input"
-                placeholder="0"
-              />
+              <input type="number" v-model="meetingDuration" class="small-input" placeholder="0" />
             </div>
 
             <div class="control-group">
