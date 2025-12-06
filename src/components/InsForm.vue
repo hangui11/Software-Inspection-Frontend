@@ -27,6 +27,7 @@ import {
   updateChecklistItemStatus,
   deleteChecklistItemDB,
   getUserProjectById,
+  updateProjectStatus,
 } from '@/lib/appwrite.js'
 
 const props = defineProps({
@@ -92,12 +93,72 @@ const engineerColumns = computed(() => {
 
 const defectTotals = computed(() => {
   const totals = { maj: 0, min: 0, A: 0, B: 0 }
+
+  // Initialize specific engineer columns
   engineerColumns.value.forEach((col) => (totals[col.userId] = 0))
+
   defects.value.forEach((d) => {
+    // 1. Global Severity Counts (Count the defect itself once)
     if (d.severity === 'Major') totals.maj++
     else totals.min++
-    if (totals[d.userId] !== undefined) totals[d.userId]++
+
+    // 2. User Attribution (Loop through everyone who found it)
+    // We use a Set to ensure we don't double count if the data is messy
+    const finders = new Set(d.foundByUsers || [])
+
+    finders.forEach((userId) => {
+      // --- A/B Logic ---
+      if (userId === currentUserId.value) {
+        totals.A++
+      } else {
+        totals.B++
+      }
+
+      // --- Individual Engineer Column ---
+      // Only increment if this user is actually one of the tracked columns
+      if (totals[userId] !== undefined) {
+        totals[userId]++
+      }
+    })
   })
+
+  return totals
+})
+
+const uniqueTotals = computed(() => {
+  const totals = { A: 0, B: 0 }
+
+  // Add per-engineer totals
+  engineerColumns.value.forEach((col) => {
+    totals[col.userId] = 0
+  })
+
+  // 1. Loop defects (each defect already unique, containing foundByUsers array)
+  defects.value.forEach((d) => {
+    const finders = new Set(d.foundByUsers || [])
+
+    // Number of engineers who found this defect
+    const count = finders.size
+
+    // Only unique when exactly ONE engineer found it
+    if (count !== 1) return
+
+    // Identify that single engineer
+    const [onlyUser] = Array.from(finders)
+
+    // --- A/B logic ---
+    if (onlyUser === currentUserId.value) {
+      totals.A++ // unique to A
+    } else {
+      totals.B++ // unique to others
+    }
+
+    // --- Individual engineer column ---
+    if (totals[onlyUser] !== undefined) {
+      totals[onlyUser]++
+    }
+  })
+
   return totals
 })
 
@@ -111,7 +172,9 @@ onMounted(async () => {
 
     products.value = await getProjectProducts(projectId.value)
 
-    current_user_role.value = await getUserProjectById(projectId.value, currentUserId.value)
+    const user_project_info = await getUserProjectById(projectId.value, currentUserId.value)
+
+    current_user_role.value = user_project_info.user_role
     if (!current_project.value) {
       console.error('Project not found with ID:', projectId.value)
     }
@@ -207,6 +270,8 @@ const handleFileUpload = async (event) => {
     // A. Upload to Appwrite Storage
     const uploadedFile = await uploadFileToStorage(file)
 
+    await updateProjectStatus(projectId.value, 'In Progress')
+
     // B. Create Product Document in DB
     // 🔴 FIX: ensure projectId.value and currentUserId.value are valid
     if (!projectId.value || !currentUserId.value) {
@@ -256,6 +321,7 @@ const addDefect = async () => {
     }
 
     await addDefectTransaction(defectPayload, engineerPayload)
+    await updateProjectStatus(projectId.value, 'In Progress')
 
     showAddPopup.value = false
     newDefect.value = { id: '', desc: '', type: 'Major' }
@@ -286,6 +352,7 @@ const saveEngineerInfo = async () => {
       engineerForm.value.size,
       engineerForm.value.time,
     )
+
     showEngineerPopup.value = false
     await loadProductData()
   } catch (e) {
@@ -491,59 +558,67 @@ const uniqueDefects = computed(() => {
 })
 
 const meetingDuration = ref(0) // Duration of the meeting in minutes
-
+const sizeMeasure = ref('LOC') // Default value
 const inspectionSummary = computed(() => {
-  // 1. Group defects by their logical ID (defectId) to find overlaps
+  // 1. Group defects by their logical ID to find overlaps
   const defectMap = {}
 
   defects.value.forEach((d) => {
     const id = d.defectId
+
+    // Initialize if strictly unique, though harmless if repetitive
     if (!defectMap[id]) defectMap[id] = { me: false, others: false }
 
-    if (d.userId === currentUserId.value) {
-      defectMap[id].me = true
-    } else {
-      defectMap[id].others = true
-    }
+    // --- FIX: Loop through all finders, not just the author ---
+    const finders = d.foundByUsers || []
+
+    finders.forEach((finderId) => {
+      if (finderId === currentUserId.value) {
+        defectMap[id].me = true
+      } else {
+        defectMap[id].others = true
+      }
+    })
   })
 
-  // 2. Calculate A, B, C
-  let A = 0
-  let B = 0
-  let C = 0
+  // 2. Calculate A, B, C (Capture-Recapture variables)
+  let A = 0 // Found by Me
+  let B = 0 // Found by Others
+  let C = 0 // Found by Both (Overlap)
 
   Object.values(defectMap).forEach((status) => {
-    if (status.me) A++ // Defects found by you (A)
-    if (status.others) B++ // Defects found by others (B)
-    if (status.me && status.others) C++ // Found by both (C)
+    if (status.me) A++
+    if (status.others) B++
+
+    // If found by 'me' AND found by 'others', it counts towards the overlap (C)
+    if (status.me && status.others) C++
   })
 
-  // 3. Calculate Estimates
-  const numberFound = A + B - C // Unique defects found
+  // 3. Calculate Estimates (Lincoln-Petersen Estimator)
+  // Unique defects actually found: (A + B) - Overlap
+  const numberFound = A + B - C
 
   let estimatedTotal = 0
   if (C > 0) {
-    // Estimated Total = (A * B) / C
+    // Formula: (Me_Total * Others_Total) / Overlap
     estimatedTotal = Math.round((A * B) / C)
   } else {
-    // If C=0, we can't use the capture-recapture model, so we default to the number found.
+    // Fallback if no overlap exists (avoids divide by zero)
     estimatedTotal = numberFound
   }
 
-  const numberLeft = Math.max(0, estimatedTotal - numberFound) // Defects left
+  // Defects guessed to remain undetected
+  const numberLeft = Math.max(0, estimatedTotal - numberFound)
 
   // 4. Time & Size Metrics
-  // Total Size: Sum of size from engineer entries (e.g., total pages/LOC reviewed)
+  // Note: Ensure 'engineers.value' includes the current user if you want their time/size included
   const totalSize = engineers.value.reduce((sum, eng) => sum + (eng.size || 0), 0)
-
-  // Total Prep Time (minutes): Sum of 'time' property from all engineer entries
   const totalPrepMinutes = engineers.value.reduce((sum, eng) => sum + (eng.time || 0), 0)
 
-  // Total Minutes = Prep Time + Meeting Time
   const totalMinutes = totalPrepMinutes + (parseFloat(meetingDuration.value) || 0)
   const totalHours = totalMinutes / 60
 
-  // Overall Rate = Size / Hours
+  // Rate: Size / Total Hours (e.g., LOC per Hour)
   const rate = totalHours > 0 ? (totalSize / totalHours).toFixed(2) : 0
 
   return {
@@ -629,7 +704,7 @@ const inspectionSummary = computed(() => {
           ref="fileInput"
           @change="handleFileUpload"
           style="display: none"
-          accept=".pdf, .txt, text/plain"
+          accept=".pdf, .txt, text/plain, .js, .py, .ts, .java, .cpp, .cs, .sql, .sh, .php, .json"
         />
         <button class="upload-btn" @click="triggerUpload"><span>☁️</span> Upload Product</button>
       </div>
@@ -782,13 +857,29 @@ const inspectionSummary = computed(() => {
                 <td>{{ d.description }}</td>
                 <td class="text-center bg-light">{{ d.severity === 'Major' ? 1 : '' }}</td>
                 <td class="text-center bg-light">{{ d.severity === 'Minor' ? 1 : '' }}</td>
-                <td v-for="col in engineerColumns" :key="col.userId" class="text-center">
-                  {{ d.userId === col.userId ? '1' : '' }}
+                <td v-for="col in engineerColumns" :key="col.userId" class="col-xs text-center">
+                  {{ d.foundByUsers && d.foundByUsers.includes(col.userId) ? '1' : '' }}
                 </td>
-                <td></td>
-                <td></td>
+                <td class="text-center">{{ d.foundByUsers.includes(currentUserId) ? '1' : '' }}</td>
+                <td class="text-center">
+                  {{ d.foundByUsers.some((u) => u !== currentUserId) ? '1' : '' }}
+                </td>
               </tr>
             </tbody>
+
+            <tfoot>
+              <tr class="summary-row total-row">
+                <td colspan="2" class="text-right label-cell">Unique Defects</td>
+                <td class="text-center">{{ '' }}</td>
+                <td class="text-center">{{ '' }}</td>
+                <td v-for="col in engineerColumns" :key="col.userId" class="text-center">
+                  {{ uniqueTotals[col.userId] }}
+                </td>
+                <td class="text-center">{{ uniqueTotals.A }}</td>
+                <td class="text-center">{{ uniqueTotals.B }}</td>
+              </tr>
+            </tfoot>
+
             <tfoot>
               <tr class="summary-row total-row">
                 <td colspan="2" class="text-right label-cell">Total</td>
@@ -797,8 +888,8 @@ const inspectionSummary = computed(() => {
                 <td v-for="col in engineerColumns" :key="col.userId" class="text-center">
                   {{ defectTotals[col.userId] }}
                 </td>
-                <td>0</td>
-                <td>0</td>
+                <td class="text-center">{{ defectTotals.A }}</td>
+                <td class="text-center">{{ defectTotals.B }}</td>
               </tr>
             </tfoot>
           </table>
@@ -815,8 +906,18 @@ const inspectionSummary = computed(() => {
           <h2 class="panel-title">Inspection Summary</h2>
 
           <div class="summary-controls">
-            <label>Meeting Duration (min): </label>
-            <input type="number" v-model="meetingDuration" class="small-input" placeholder="0" />
+            <div class="control-group">
+              <label>Meeting Duration (min): </label>
+              <input type="number" v-model="meetingDuration" class="small-input" placeholder="0" />
+            </div>
+
+            <div class="control-group">
+              <label>Size Measure: </label>
+              <select v-model="sizeMeasure" class="small-input">
+                <option value="LOC">LOC</option>
+                <option value="Pages">Pages</option>
+              </select>
+            </div>
           </div>
 
           <table class="styled-table summary-table">
@@ -829,39 +930,39 @@ const inspectionSummary = computed(() => {
             <tbody>
               <tr>
                 <td>Total Defects (A)</td>
-                <td>{{ inspectionSummary.A }}</td>
+                <td class="text-center">{{ inspectionSummary.A }}</td>
               </tr>
               <tr>
                 <td>Total Defects (B)</td>
-                <td>{{ inspectionSummary.B }}</td>
+                <td class="text-center">{{ inspectionSummary.B }}</td>
               </tr>
               <tr>
                 <td>C (Common)</td>
-                <td>{{ inspectionSummary.C }}</td>
+                <td class="text-center">{{ inspectionSummary.C }}</td>
               </tr>
-              <tr class="highlight-row">
-                <td>**Unique Defects Found**</td>
-                <td>**{{ inspectionSummary.numberFound }}**</td>
+              <tr>
+                <td>Number Found (A+B-C):</td>
+                <td class="text-center">{{ inspectionSummary.numberFound }}</td>
               </tr>
               <tr>
                 <td>Estimated Total Defects (AB/C)</td>
-                <td>{{ inspectionSummary.estimatedTotal }}</td>
+                <td class="text-center">{{ inspectionSummary.estimatedTotal }}</td>
               </tr>
               <tr>
-                <td>**Number Left**</td>
-                <td>**{{ inspectionSummary.numberLeft }}**</td>
+                <td>Number Left</td>
+                <td class="text-center">{{ inspectionSummary.numberLeft }}</td>
               </tr>
               <tr>
-                <td>Product Size (LOC/Pages)</td>
-                <td>{{ inspectionSummary.totalSize }}</td>
+                <td>Product Size ({{ sizeMeasure }})</td>
+                <td class="text-center">{{ inspectionSummary.totalSize }}</td>
               </tr>
               <tr>
                 <td>Total Inspection Hours</td>
-                <td>{{ inspectionSummary.totalHours }}</td>
+                <td class="text-center">{{ inspectionSummary.totalHours }}</td>
               </tr>
               <tr class="highlight-row">
-                <td>**Overall Rate** (Size ÷ Hours)</td>
-                <td>**{{ inspectionSummary.rate }}**</td>
+                <td>Overall Rate (Size ÷ Hours)</td>
+                <td class="text-center">{{ inspectionSummary.rate }}</td>
               </tr>
             </tbody>
           </table>
@@ -1450,27 +1551,32 @@ const inspectionSummary = computed(() => {
   margin-bottom: 50px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
-
 .summary-controls {
   padding: 15px;
   background-color: #f9f9f9;
   border-bottom: 1px solid #eee;
+
+  /* Aligns the two inputs horizontally */
+  display: flex;
+  gap: 20px; /* Space between the Duration and Measure inputs */
+  align-items: center;
 }
 
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Space between label and input */
+}
+
+/* Reusing your existing class, but ensuring the select looks good */
 .small-input {
   padding: 5px;
-  width: 80px;
+  width: 80px; /* Or slightly wider for the dropdown if needed */
   border: 1px solid #ccc;
   border-radius: 4px;
 }
 
-.summary-table td:nth-child(2) {
-  font-weight: bold;
+.text-center {
   text-align: center;
-  color: #2c3e50;
-}
-
-.highlight-row {
-  background-color: #e3f2fd; /* Light blue highlight for key metrics */
 }
 </style>

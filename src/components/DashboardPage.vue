@@ -1,6 +1,6 @@
 <!-- Dashboard.vue -->
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { createProject, joinProject, formatAppwriteDate } from '@/lib/appwrite'
 import { userInformationStore } from '@/store/searchStore'
 import { storeToRefs } from 'pinia'
@@ -15,7 +15,7 @@ const userInfoStore = userInformationStore()
 const selectedRole = ref('reviewer') // Default value
 const roles = ref(['moderator', 'reviewer', 'instructor'])
 
-const { recent_projects, projects, avatar, username, userid } = storeToRefs(userInfoStore)
+const { recent_projects: recent_projects, userid: userid, user_calendar: user_calendar_stored} = storeToRefs(userInfoStore)
 const user_recent_projects = ref(recent_projects)
 
 const props = defineProps({
@@ -30,6 +30,57 @@ onMounted(() => {})
 onUnmounted(() => {})
 
 const isProjectModalOpen = ref(false)
+const reminders = ref(user_calendar_stored)
+
+const attributes = computed(() => {
+  // 1. Process the dynamic events from the reminders array
+  const reminderAttributes = reminders.value.map((event) => {
+    // Define the base attribute object
+    const attribute = {
+      key: event.id,
+      dates: event.dates,
+      popover: {
+            label: event.title, // The text shown on hover
+            // Optional: You can customize the look of the popover box
+            visibility: 'hover', // Default, but good to be explicit
+            // hideIndicator: true // Hides the small dot/bar VCalendar adds for popovers
+        },
+    }
+
+    // 🛑 FIX: Inject the custom class and CSS variable style at the root level
+    //        only if the event requires a custom solid highlight.
+    if (event.highlight) {
+      attribute.highlight = {
+        color: event.color,
+        fillMode: 'solid',
+      }
+    } else if (event.dot) {
+      attribute.dot = event.color
+    }
+
+    return attribute
+  })
+
+  // 4. Define the static "today" highlight attribute
+  const todayAttribute = {
+    key: 'today',
+    dates: new Date(),
+    // Use a less aggressive style (e.g., a dot or low-opacity highlight)
+    // so it doesn't conflict with existing events.
+    highlight: {
+      color: 'blue',
+      fillMode: 'light', // Use a subtle fill mode
+    },
+    // Optional: Ensure it's always placed in the background
+    order: 10,
+  }
+
+  // 🛑 FIX: Combine the two arrays for the final result.
+  // The computed property must return the final array of attributes.
+  // console.log(reminderAttributes)
+  return [...reminderAttributes, todayAttribute]
+})
+
 
 const showProjectWindow = (project_type) => {
   isProjectModalOpen.value = true
@@ -129,7 +180,12 @@ const join_project_api = async () => {
             <button @click="showProjectWindow(2)">Join Existing Project</button>
           </div>
         </div>
-        <VCalendar />
+        <VCalendar
+          :attributes="attributes"
+          is-inline
+          hide-header
+          :first-day-of-week="2"
+        />
       </div>
 
       <div class="recent-projects">
