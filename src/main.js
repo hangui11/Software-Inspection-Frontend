@@ -87,8 +87,8 @@ const routes = [
 ]
 
 const router = createRouter({
-  //history: createWebHistory(process.env.BASE_URL), // remote
-  history: createWebHistory(), // local
+  history: createWebHistory(process.env.BASE_URL), // remote
+  // history: createWebHistory(), // local
   routes,
   scrollBehavior(to, from, savedPosition) {
     return { top: 0 }
