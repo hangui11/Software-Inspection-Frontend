@@ -349,7 +349,7 @@ export const sendAllProjectUsersInvitation = async (project_id, join_user_id, ro
           read_by_owner: false,
           role: role,
           project_user_id: projectUser.user_id,
-          status: 'accepted',
+          status: 'joined',
           read_by_invited: true,
         },
       ),
@@ -1164,6 +1164,8 @@ export const updateInvitationStatus = async (invitation_id, status) => {
 }
 
 export const deleteReadRequests = async (user_id) => {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
   try {
     const checkRequest = await databases.listDocuments(
       appwriteConfig.databaseId,
@@ -1172,6 +1174,7 @@ export const deleteReadRequests = async (user_id) => {
         Query.equal('project_user_id', user_id),
         Query.notEqual('status', 'pending'),
         Query.equal('read_by_owner', true),
+        Query.lessThan('$createdAt', oneDayAgo),
       ],
     )
 

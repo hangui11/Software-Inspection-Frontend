@@ -291,7 +291,7 @@ const showCalendar = () => {
               :key="message.request_id"
               class="message-item request-item"
             >
-              <p>
+              <p v-if="message.status != 'joined'">
                 The invitation for user <strong>{{ message.invited_user.name }}</strong> (<span
                   class="email"
                   >{{ message.invited_user.email }}</span
@@ -305,6 +305,14 @@ const showCalendar = () => {
                 >
                   {{ message.status }}
                 </strong>
+              </p>
+
+              <p v-else>
+                User <strong>{{ message.invited_user.name }}</strong> (<span class="email">{{
+                  message.invited_user.email
+                }}</span
+                >) has successfully joined the project <strong>{{ message.project_name }}</strong
+                >.
               </p>
             </div>
 
