@@ -1370,6 +1370,25 @@ export const leaveProject = async (project_id, user_id) => {
           },
         ),
       )
+
+      for (const user of updatedUsersIds) {
+        allDeletionPromises.push(
+          databases.createDocument(
+            appwriteConfig.databaseId,
+            appwriteConfig.projectInvitationCollectionId,
+            ID.unique(),
+            {
+              invited_user_id: user_id,
+              project_id: project_id,
+              read_by_owner: false,
+              role: '',
+              project_user_id: user,
+              status: 'exited',
+              read_by_invited: true,
+            },
+          ),
+        )
+      }
     } else {
       console.warn(`Project document ID ${project_id} not found.`)
     }

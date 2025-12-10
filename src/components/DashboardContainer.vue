@@ -291,31 +291,38 @@ const showCalendar = () => {
               :key="message.request_id"
               class="message-item request-item"
             >
-              <p v-if="message.status != 'joined'">
-                The invitation for user <strong>{{ message.invited_user.name }}</strong> (<span
-                  class="email"
-                  >{{ message.invited_user.email }}</span
-                >) to join project <strong>{{ message.project_name }}</strong> is currently
-                <strong
-                  :class="{
-                    'status-accepted': message.status === 'accepted',
-                    'status-rejected': message.status === 'rejected',
-                    'status-pending': message.status === 'pending',
-                  }"
-                >
-                  {{ message.status }}
-                </strong>
+              <p v-if="message.status == 'exited'" class="status-exited">
+                User <strong>{{ message.invited_user.name }}</strong> (<span class="email">{{
+                  message.invited_user.email
+                }}</span
+                >) has left the project <strong>{{ message.project_name }}</strong
+                >.
               </p>
 
-              <p v-else>
+              <p v-else-if="message.status == 'joined'" class="status-joined">
                 User <strong>{{ message.invited_user.name }}</strong> (<span class="email">{{
                   message.invited_user.email
                 }}</span
                 >) has successfully joined the project <strong>{{ message.project_name }}</strong
                 >.
               </p>
-            </div>
 
+              <p v-else class="status-general">
+                The invitation for user <strong>{{ message.invited_user.name }}</strong> (<span
+                  class="email"
+                  >{{ message.invited_user.email }}</span
+                >) to join project <strong>{{ message.project_name }}</strong> is currently
+                <strong
+                  :class="{
+                    'status-rejected': message.status === 'rejected',
+                    'status-pending': message.status === 'pending',
+                    'status-accepted': message.status === 'accepted',
+                  }"
+                >
+                  {{ message.status }}
+                </strong>
+              </p>
+            </div>
             <div
               v-for="message in userCalendaMessagesContainer"
               :key="message.id"
@@ -602,6 +609,30 @@ input#search {
   color: #856404; /* Dark yellow/brown text */
   background-color: #fff3cd; /* Light yellow background */
   border: 1px solid #ffeeba;
+}
+
+.message-item p.status-joined {
+  /* Ensures the paragraph background is used for the success message */
+  background-color: #e9fbe9;
+  border-left: 4px solid #28a745;
+}
+.message-item p.status-joined strong {
+  color: #28a745; /* Green emphasis */
+}
+
+/* --- NEW: STATUS FOR USER EXITED (Negative Notification) --- */
+.message-item p.status-exited {
+  /* Ensures the paragraph background is used for the exit message */
+  background-color: #fcebeb;
+  border-left: 4px solid #dc3545; /* Red border accent */
+}
+.message-item p.status-exited strong {
+  color: #dc3545; /* Red emphasis */
+}
+
+.request-item .status-general {
+  /* No special background/border needed, the inner badge carries the status */
+  padding: 5px 0;
 }
 
 /* Style for pending invitations (Action Required by current user) */
