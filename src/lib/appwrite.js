@@ -291,6 +291,9 @@ export const joinProject = async (project_id, userid, role) => {
       throw new Error(`The user ${userid} is already in the project.`)
     }
 
+    await sendAllProjectUsersInvitation(project_id, userid, role)
+    console.log(`Send the join request to all the project users.`)
+
     const projectDocument = projectsResult.documents[0]
     projectDocument.usersIds.push(userid)
     // --- 3. CREATE NEW LINK DOCUMENT ---
@@ -317,9 +320,6 @@ export const joinProject = async (project_id, userid, role) => {
       ),
     ])
     console.log(`User ${userid} successfully joined project ${project_id}.`)
-
-    await sendAllProjectUsersInvitation(project_id, userid, role)
-    console.log(`Send the join request to all the project users.`)
 
     return { user_project: newUserProject, project: updatedProject }
   } catch (error) {
@@ -348,7 +348,7 @@ export const sendAllProjectUsersInvitation = async (project_id, join_user_id, ro
           project_id: project_id,
           read_by_owner: false,
           role: role,
-          project_user_id: projectUser.$id,
+          project_user_id: projectUser.user_id,
           status: 'accepted',
           read_by_invited: true,
         },
@@ -1242,7 +1242,13 @@ export const leaveProject = async (project_id, user_id) => {
       databases.listDocuments(
         appwriteConfig.databaseId,
         appwriteConfig.projectInvitationCollectionId,
-        [Query.equal('project_id', project_id)],
+        [
+          Query.equal('project_id', project_id),
+          Query.or([
+            Query.equal('invited_user_id', user_id),
+            Query.equal('project_user_id', user_id),
+          ]),
+        ],
       ),
       databases.listDocuments(appwriteConfig.databaseId, appwriteConfig.userCalendarCollectionId, [
         Query.equal('project_id', project_id),
