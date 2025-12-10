@@ -317,9 +317,46 @@ export const joinProject = async (project_id, userid, role) => {
       ),
     ])
     console.log(`User ${userid} successfully joined project ${project_id}.`)
+
+    await sendAllProjectUsersInvitation(project_id, userid, role)
+    console.log(`Send the join request to all the project users.`)
+
     return { user_project: newUserProject, project: updatedProject }
   } catch (error) {
     console.error('Error creating user project link:', error)
+    throw error
+  }
+}
+
+export const sendAllProjectUsersInvitation = async (project_id, join_user_id, role) => {
+  try {
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userProjectsCollectionId,
+      [Query.equal('project_id', project_id)],
+    )
+
+    const projectUsers = response.documents
+
+    const invitations = projectUsers.map((projectUser) =>
+      databases.createDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.projectInvitationCollectionId,
+        ID.unique(),
+        {
+          invited_user_id: join_user_id,
+          project_id: project_id,
+          read_by_owner: false,
+          role: role,
+          project_user_id: projectUser.$id,
+          status: 'accepted',
+          read_by_invited: true,
+        },
+      ),
+    )
+    await Promise.all(invitations)
+  } catch (error) {
+    console.log(error)
     throw error
   }
 }
