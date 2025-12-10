@@ -291,7 +291,10 @@ export const joinProject = async (project_id, userid, role) => {
       throw new Error(`The user ${userid} is already in the project.`)
     }
 
+    await checkProjectInvitation(project_id, userid)
+
     await sendAllProjectUsersInvitation(project_id, userid, role)
+
     console.log(`Send the join request to all the project users.`)
 
     const projectDocument = projectsResult.documents[0]
@@ -324,6 +327,34 @@ export const joinProject = async (project_id, userid, role) => {
     return { user_project: newUserProject, project: updatedProject }
   } catch (error) {
     console.error('Error creating user project link:', error)
+    throw error
+  }
+}
+
+export const checkProjectInvitation = async (project_id, join_user_id) => {
+  try {
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectInvitationCollectionId,
+      [
+        Query.equal('project_id', project_id),
+        Query.equal('invited_user_id', join_user_id),
+        Query.equal('status', 'pending'),
+      ],
+    )
+
+    await Promise.all(
+      response.documents.map((invitation) =>
+        databases.deleteDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.projectInvitationCollectionId,
+          invitation.$id,
+        ),
+      ),
+    )
+    return { deleted: response.total }
+  } catch (error) {
+    console.log('Error in checking project invitation')
     throw error
   }
 }
