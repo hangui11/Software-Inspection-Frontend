@@ -290,8 +290,13 @@ const showCalendar = () => {
               v-for="message in requestMessagesContainer"
               :key="message.request_id"
               class="message-item request-item"
+              :class="{
+                'status-exited': message.status === 'exited',
+                'status-joined': message.status === 'joined',
+                /* Add other status classes here if they should override the base request-item styles */
+              }"
             >
-              <p v-if="message.status == 'exited'" class="status-exited">
+              <p v-if="message.status == 'exited'">
                 User <strong>{{ message.invited_user.name }}</strong> (<span class="email">{{
                   message.invited_user.email
                 }}</span
@@ -299,7 +304,7 @@ const showCalendar = () => {
                 >.
               </p>
 
-              <p v-else-if="message.status == 'joined'" class="status-joined">
+              <p v-else-if="message.status == 'joined'">
                 User <strong>{{ message.invited_user.name }}</strong> (<span class="email">{{
                   message.invited_user.email
                 }}</span
@@ -307,7 +312,7 @@ const showCalendar = () => {
                 >.
               </p>
 
-              <p v-else class="status-general">
+              <p v-else>
                 The invitation for user <strong>{{ message.invited_user.name }}</strong> (<span
                   class="email"
                   >{{ message.invited_user.email }}</span
@@ -323,6 +328,7 @@ const showCalendar = () => {
                 </strong>
               </p>
             </div>
+
             <div
               v-for="message in userCalendaMessagesContainer"
               :key="message.id"
@@ -590,6 +596,42 @@ input#search {
   color: #6c757d;
 }
 
+.request-item {
+  /* Base style for the request item (e.g., pending invitations) */
+  border-left: 5px solid #ffc107; /* Yellow/Orange bar */
+  background-color: #fff9e6; /* Very light yellow background */
+}
+.request-item.status-exited {
+  background-color: #fcebeb; /* Light Red Override */
+  border-left: 5px solid #dc3545; /* Red accent Override */
+}
+
+/* Ensure the text inside also gets the red color treatment */
+.request-item.status-exited p strong {
+  color: #dc3545;
+}
+
+.request-item.status-joined {
+  background-color: #e9fbe9; /* Light Green Override */
+  border-left: 5px solid #28a745; /* Green accent Override */
+}
+
+/* Ensure the text inside also gets the green color treatment */
+.request-item.status-joined p strong {
+  color: #28a745;
+}
+
+/* Common badge styling */
+.message-item strong.status-accepted,
+.message-item strong.status-rejected,
+.message-item strong.status-pending {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 /* --- Green for Success/Acceptance --- */
 .message-item strong.status-accepted {
   color: #155724;
@@ -611,40 +653,10 @@ input#search {
   border: 1px solid #ffeeba;
 }
 
-.message-item p.status-joined {
-  /* Ensures the paragraph background is used for the success message */
-  background-color: #e9fbe9;
-  border-left: 4px solid #28a745;
-}
-.message-item p.status-joined strong {
-  color: #28a745; /* Green emphasis */
-}
-
-/* --- NEW: STATUS FOR USER EXITED (Negative Notification) --- */
-.message-item p.status-exited {
-  /* Ensures the paragraph background is used for the exit message */
-  background-color: #fcebeb;
-  border-left: 4px solid #dc3545; /* Red border accent */
-}
-.message-item p.status-exited strong {
-  color: #dc3545; /* Red emphasis */
-}
-
-.request-item .status-general {
-  /* No special background/border needed, the inner badge carries the status */
-  padding: 5px 0;
-}
-
 /* Style for pending invitations (Action Required by current user) */
 .invitation-item {
   border-left: 5px solid #28a745; /* Green bar for a positive/actionable item */
   background-color: #e6ffed; /* Very light green background */
-}
-
-/* Style for status updates on requests you SENT (Status Update/Info) */
-.request-item {
-  border-left: 5px solid #ffc107; /* Yellow/Orange bar for a status update */
-  background-color: #fff9e6; /* Very light yellow background */
 }
 
 .invitation-actions {

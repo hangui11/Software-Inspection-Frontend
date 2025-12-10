@@ -739,6 +739,19 @@ export const checkUserInvited = async (project_id, user_id) => {
         Query.limit(1),
       ],
     )
+    if (response.total > 0) {
+      const invitation = response.documents[0]
+      if (invitation.status === 'exited') {
+        await databases.deleteDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.projectInvitationCollectionId,
+          invitation.$id,
+        )
+        return false
+      } else {
+        return true
+      }
+    }
     return response.total > 0
   } catch (error) {
     console.log('Check invited user error: ' + error)
