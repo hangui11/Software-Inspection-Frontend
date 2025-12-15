@@ -43,6 +43,7 @@ import {
   showUserRequest,
   getProjectById,
   getUserCalendar,
+  deletePastUserCalendar,
 } from '@/lib/appwrite'
 import { userInformationStore } from '@/store/searchStore'
 import { storeToRefs } from 'pinia'
@@ -93,6 +94,7 @@ onMounted(async () => {
 
     await loadMessages(user_id.value)
     await loadProjects()
+    await deletePastUserCalendar(user_id.value)
     await loadUserCalendar()
   } catch (error) {
     alert('Do not have user logged ' + error)
@@ -121,7 +123,7 @@ const colors = [
 
 const loadUserCalendar = async () => {
   reminders.value = []
-  const userCalendar = await getUserCalendar(userid_stored.value)
+  const userCalendar = await getUserCalendar(user_id.value)
 
   if (userCalendar) {
     let i = 0

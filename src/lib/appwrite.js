@@ -1730,3 +1730,30 @@ export const updateProjectStatus = async (project_id, status) => {
     throw new Error(`Failed to update project status for ID ${project_id}.`)
   }
 }
+
+export const deletePastUserCalendar = async (user_id) => {
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+  try {
+    const response = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCalendarCollectionId,
+      [Query.equal('user_id', user_id), Query.lessThan('end_date', oneWeekAgo)],
+    )
+
+    await Promise.all(
+      response.documents.map((doc) =>
+        databases.deleteDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.userCalendarCollectionId,
+          doc.$id,
+        ),
+      ),
+    )
+
+    return { deleted: response.total }
+  } catch (error) {
+    console.error(`Error deleting past calendar for user ${user_id}:`, error)
+    throw error
+  }
+}
