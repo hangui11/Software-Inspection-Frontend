@@ -13,4 +13,13 @@ export default defineConfig({
       '@public': fileURLToPath(new URL('./public', import.meta.url)),
     },
   },
+  test: {
+    // ⬇️ Add this line
+    environment: 'jsdom',
+    // Optional: exact imports usually not needed if using 'jsdom' env correctly,
+    // but useful if you have globals like describe/it enabled
+    globals: true,
+  },
 })
+
+
