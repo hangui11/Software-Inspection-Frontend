@@ -173,6 +173,7 @@ onMounted(async () => {
 
     products.value = await getProjectProducts(projectId.value)
     current_status.value = current_project.value?.project_status
+    console.log('Current project status:', current_status.value)
     const user_project_info = await getUserProjectById(projectId.value, currentUserId.value)
 
     current_user_role.value = user_project_info.user_role
@@ -731,7 +732,7 @@ const inspectionSummary = computed(() => {
           style="display: none"
           accept=".pdf, .txt, text/plain, .js, .py, .ts, .java, .cpp, .cs, .sql, .sh, .php, .json"
         />
-        <button class="upload-btn" @click="triggerUpload"><span>☁️</span> Upload Product</button>
+        <button class="upload-btn" @click="triggerUpload" :disabled = "current_status === 'Completed' || current_user_role === 'moderator'" ><span>☁️</span> Upload Product</button>
       </div>
 
       <div class="product-list">
@@ -921,8 +922,8 @@ const inspectionSummary = computed(() => {
         </div>
 
         <div class="action-buttons" v-if="activeProductId">
-          <button class="add-defect-btn" @click="showAddPopup = true">+ Add Defect</button>
-          <button class="complete-info-btn" @click="openEngineerPopup">
+          <button class="add-defect-btn" @click="showAddPopup = true" :disabled = "current_status === 'Completed' || current_user_role === 'moderator'" > + Add Defect</button>
+          <button class="complete-info-btn" @click="openEngineerPopup" :disabled = "current_status === 'Completed' || current_user_role === 'moderator'">
             Complete Engineer Info
           </button>
         </div>
@@ -1627,6 +1628,22 @@ const inspectionSummary = computed(() => {
   justify-content: center;
   outline: none;
 }
+
+.add-defect-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.complete-info-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 
 /* "Close the Project" - Warning/Danger Style */
 .status-btn-close {
