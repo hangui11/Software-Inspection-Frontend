@@ -73,6 +73,7 @@ const copyStatus = ref('initial')
 const isModalOpen = ref(false)
 const isExitModalOpen = ref(false)
 const current_user_role = ref('')
+const current_status = ref('')
 
 const showShareWindow = () => {
   isModalOpen.value = true
@@ -171,7 +172,7 @@ onMounted(async () => {
     current_project.value = projects_stored.value.find((p) => p.$id === projectId.value)
 
     products.value = await getProjectProducts(projectId.value)
-
+    current_status.value = current_project.value?.project_status
     const user_project_info = await getUserProjectById(projectId.value, currentUserId.value)
 
     current_user_role.value = user_project_info.user_role
@@ -482,6 +483,16 @@ const setActiveTab = (id) => {
   activeTabId.value = id
 }
 
+const updateStatus = async (status) => {
+  try {
+    await updateProjectStatus(projectId.value, status)
+    await props.loadProjects()
+    window.location.reload()
+  } catch (e) {
+    console.error('Error updating status: ', e)
+  }
+}
+
 // --- ITEM LOGIC ---
 
 // 5. Add Item
@@ -662,6 +673,19 @@ const inspectionSummary = computed(() => {
 
   <div class="app-container">
     <aside class="sidebar">
+      <div v-if="current_user_role === 'owner'" class="status-btn-container">
+        <div v-if="current_status === 'In Progress'">
+          <button class="status-btn status-btn-close" @click="updateStatus('Completed')">
+            Close the Project
+          </button>
+        </div>
+
+        <div v-else>
+          <button class="status-btn status-btn-reopen" @click="updateStatus('In Progress')">
+            Reopen the Project
+          </button>
+        </div>
+      </div>
       <div class="header-container">
         <h3>{{ current_project?.project_name }}</h3>
 
@@ -696,6 +720,7 @@ const inspectionSummary = computed(() => {
           {{ copyStatus === 'copied' ? 'ID Copied!' : 'Copy Error' }}
         </span>
       </div>
+
       <div class="sidebar-header"><h3>Files</h3></div>
 
       <div class="upload-section">
@@ -1578,5 +1603,61 @@ const inspectionSummary = computed(() => {
 
 .text-center {
   text-align: center;
+}
+
+/* Container styling for the status section */
+.status-btn-container {
+  justify-content: center;
+  margin: 20px 0;
+  display: flex;
+  gap: 10px;
+}
+
+/* Base button styling */
+.status-btn {
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+/* "Close the Project" - Warning/Danger Style */
+.status-btn-close {
+  background-color: #fff1f0; /* Light red background */
+  color: #cf1322; /* Deep red text */
+  border: 1px solid #ffa39e;
+}
+
+.status-btn-close:hover {
+  background-color: #cf1322;
+  color: #ffffff;
+  border-color: #cf1322;
+  box-shadow: 0 4px 12px rgba(207, 19, 34, 0.2);
+}
+
+/* "Reopen the Project" - Primary/Success Style */
+.status-btn-reopen {
+  background-color: #e6f7ff; /* Light blue background */
+  color: #007bff; /* Primary blue text */
+  border: 1px solid #91d5ff;
+}
+
+.status-btn-reopen:hover {
+  background-color: #007bff;
+  color: #ffffff;
+  border-color: #007bff;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
+}
+
+/* Active/Press effect */
+.status-btn:active {
+  transform: scale(0.98);
 }
 </style>
