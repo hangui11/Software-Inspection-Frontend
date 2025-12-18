@@ -12,7 +12,7 @@ const searchStore = useSearchStore()
 // Destructure the reactive references from the store
 // We'll declare these variables outside of onMounted
 // so they are available to the component template.
-const { filteredProjects, projects, avatar, username } = storeToRefs(searchStore)
+const { filteredProjects: filteredProjects, projects: projects } = storeToRefs(searchStore)
 
 const activeStatusFilter = ref('All')
 const availableStatuses = ['All', 'Not Started', 'In Progress', 'Completed']
@@ -96,7 +96,7 @@ const finalDisplayProjects = computed(() => {
           @click="
             router.push({
               name: 'dashboard-project-ins-form',
-              params: { project_id: project.$id, product_id: 'null'},
+              params: { project_id: project.$id, product_id: 'null' },
             })
           "
         >

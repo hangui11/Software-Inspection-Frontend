@@ -1,7 +1,6 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { getUserEmail } from '@/lib/appwrite'
-import user_icon from '@/assets/icons/user.svg'
 import { getProjectAllUsers, updateUserRoles, leaveProject, deleteProject } from '@/lib/appwrite'
 import { useRouter } from 'vue-router'
 

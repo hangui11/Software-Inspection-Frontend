@@ -1757,3 +1757,21 @@ export const deletePastUserCalendar = async (user_id) => {
     throw error
   }
 }
+
+export const updateProjectDate = async (project_id) => {
+  try {
+    const dateStr = new Date().toISOString()
+    await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.projectCollectionId,
+      project_id,
+      {
+        update_date: dateStr,
+      },
+    )
+    console.log(`Project ID: ${project_id} update_date set to ${dateStr}`)
+  } catch (error) {
+    console.error(`Error updating project date for project ID ${project_id}:`, error)
+    throw error
+  }
+}
