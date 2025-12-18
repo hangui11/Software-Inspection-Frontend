@@ -87,9 +87,11 @@ const routes = [
 ]
 
 const router = createRouter({
+  // eslint-disable-next-line no-undef
   history: createWebHistory(process.env.BASE_URL), // remote
   // history: createWebHistory(), // local
   routes,
+  // eslint-disable-next-line no-unused-vars
   scrollBehavior(to, from, savedPosition) {
     return { top: 0 }
   },

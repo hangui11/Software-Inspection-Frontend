@@ -28,6 +28,7 @@ import {
   deleteChecklistItemDB,
   getUserProjectById,
   updateProjectStatus,
+  updateProjectDate,
 } from '@/lib/appwrite.js'
 
 const props = defineProps({
@@ -230,6 +231,7 @@ const selectProduct = async (prod) => {
         fileContentUrl.value = await resp.text()
       } catch (e) {
         fileContentUrl.value = 'Error loading text file.'
+        console.log('Error loading text file:', e)
       }
     }
   }
@@ -293,6 +295,8 @@ const handleFileUpload = async (event) => {
 
     // D. Auto-select
     selectProduct(newProd)
+
+    await updateProjectDate(projectId.value)
   } catch (error) {
     alert('Error uploading file: ' + error.message)
     console.error(error)
@@ -328,6 +332,7 @@ const addDefect = async () => {
     showAddPopup.value = false
     newDefect.value = { id: '', desc: '', type: 'Major' }
     await loadProductData()
+    await updateProjectDate(projectId.value)
   } catch (e) {
     console.error(e)
     alert('Failed to save defect')
@@ -357,6 +362,7 @@ const saveEngineerInfo = async () => {
 
     showEngineerPopup.value = false
     await loadProductData()
+    await updateProjectDate(projectId.value)
   } catch (e) {
     alert('Error updating info: ', e)
   }
@@ -488,6 +494,7 @@ const updateStatus = async (status) => {
   try {
     await updateProjectStatus(projectId.value, status)
     await props.loadProjects()
+    await updateProjectDate(projectId.value)
     window.location.reload()
   } catch (e) {
     console.error('Error updating status: ', e)
@@ -732,7 +739,13 @@ const inspectionSummary = computed(() => {
           style="display: none"
           accept=".pdf, .txt, text/plain, .js, .py, .ts, .java, .cpp, .cs, .sql, .sh, .php, .json"
         />
-        <button class="upload-btn" @click="triggerUpload" :disabled = "current_status === 'Completed' || current_user_role === 'moderator'" ><span>☁️</span> Upload Product</button>
+        <button
+          class="upload-btn"
+          @click="triggerUpload"
+          :disabled="current_status === 'Completed' || current_user_role === 'moderator'"
+        >
+          <span>☁️</span> Upload Product
+        </button>
       </div>
 
       <div class="product-list">
@@ -922,8 +935,18 @@ const inspectionSummary = computed(() => {
         </div>
 
         <div class="action-buttons" v-if="activeProductId">
-          <button class="add-defect-btn" @click="showAddPopup = true" :disabled = "current_status === 'Completed' || current_user_role === 'moderator'" > + Add Defect</button>
-          <button class="complete-info-btn" @click="openEngineerPopup" :disabled = "current_status === 'Completed' || current_user_role === 'moderator'">
+          <button
+            class="add-defect-btn"
+            @click="showAddPopup = true"
+            :disabled="current_status === 'Completed' || current_user_role === 'moderator'"
+          >
+            + Add Defect
+          </button>
+          <button
+            class="complete-info-btn"
+            @click="openEngineerPopup"
+            :disabled="current_status === 'Completed' || current_user_role === 'moderator'"
+          >
             Complete Engineer Info
           </button>
         </div>
@@ -1643,7 +1666,6 @@ const inspectionSummary = computed(() => {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
 
 /* "Close the Project" - Warning/Danger Style */
 .status-btn-close {

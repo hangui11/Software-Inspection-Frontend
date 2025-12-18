@@ -43,22 +43,25 @@ onMounted(async () => {
       user_project_info,
       project_name: project.project_name,
       project_id: project.$id,
+      project_status: project.project_status,
     })),
   )
 
   const results = await Promise.all(fetchPromises)
   results.forEach((result) => {
-    const { user_project_info, project_name, project_id } = result
-    if (user_project_info.user_role === 'moderator') {
-      projects_info_moderator.value.push({
+    const { user_project_info, project_name, project_id, project_status } = result
+    if (project_status != 'Completed') {
+      if (user_project_info.user_role === 'moderator') {
+        projects_info_moderator.value.push({
+          project_id: project_id,
+          project_name: project_name,
+        })
+      }
+      projects_info.value.push({
         project_id: project_id,
         project_name: project_name,
       })
     }
-    projects_info.value.push({
-      project_id: project_id,
-      project_name: project_name,
-    })
   })
 })
 
